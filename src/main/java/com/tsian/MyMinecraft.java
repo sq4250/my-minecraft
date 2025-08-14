@@ -237,8 +237,7 @@ public class MyMinecraft {
             // 处理输入
             processInput(deltaTime);
             
-            // 更新世界 (基于摄像头位置动态加载区块)
-            world.update(camera.getX(), camera.getZ());
+            // 简单世界不需要更新
             
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             
@@ -382,68 +381,60 @@ public class MyMinecraft {
     }
     
     /**
-     * 生成世界几何数据 - 基于MC风格的ChunkMesh系统
+     * 生成世界几何数据 - 简单的3x3x3世界
      */
     private void generateWorldGeometry() {
-        var chunkMeshes = world.getRenderableChunkMeshes(camera.getX(), camera.getZ());
-        
-        // 计算总面数
-        int totalFaces = 0;
-        for (ChunkMesh mesh : chunkMeshes) {
-            totalFaces += mesh.getFaceCount();
-        }
+        var visibleFaces = world.getVisibleFaces();
         
         // 每个面4个顶点，每个顶点5个float（3个位置 + 2个纹理坐标）
-        vertices = new float[totalFaces * 4 * 5];
+        vertices = new float[visibleFaces.size() * 4 * 5];
         // 每个面2个三角形，每个三角形3个顶点
-        indices = new int[totalFaces * 6];
+        indices = new int[visibleFaces.size() * 6];
         
         int vertexIndex = 0;
         int indexIndex = 0;
         int currentVertex = 0;
         
-        for (ChunkMesh mesh : chunkMeshes) {
-            for (ChunkMesh.Face face : mesh.getFaces()) {
-                Block block = face.block;
-                int faceIndex = face.faceIndex;
+        for (World.VisibleFace visibleFace : visibleFaces) {
+            Block block = visibleFace.block;
+            int face = visibleFace.face;
+            
+            // 获取方块世界位置
+            float blockX = block.getX();
+            float blockY = block.getY();
+            float blockZ = block.getZ();
+            
+            // 获取纹理坐标
+            float[] texCoords = block.getTextureCoords(face);
+            float u1 = texCoords[0], v1 = texCoords[1];
+            float u2 = texCoords[2], v2 = texCoords[3];
+            
+            // 根据面生成顶点
+            float[][] faceVertices = getFaceVertices(blockX, blockY, blockZ, face);
+            
+            // 添加4个顶点
+            for (int i = 0; i < 4; i++) {
+                vertices[vertexIndex++] = faceVertices[i][0]; // x
+                vertices[vertexIndex++] = faceVertices[i][1]; // y
+                vertices[vertexIndex++] = faceVertices[i][2]; // z
                 
-                // 获取方块世界位置
-                float blockX = block.getX();
-                float blockY = block.getY();
-                float blockZ = block.getZ();
-                
-                // 获取纹理坐标
-                float[] texCoords = block.getTextureCoords(faceIndex);
-                float u1 = texCoords[0], v1 = texCoords[1];
-                float u2 = texCoords[2], v2 = texCoords[3];
-                
-                // 根据面生成顶点
-                float[][] faceVertices = getFaceVertices(blockX, blockY, blockZ, faceIndex);
-                
-                // 添加4个顶点
-                for (int i = 0; i < 4; i++) {
-                    vertices[vertexIndex++] = faceVertices[i][0]; // x
-                    vertices[vertexIndex++] = faceVertices[i][1]; // y
-                    vertices[vertexIndex++] = faceVertices[i][2]; // z
-                    
-                    // 纹理坐标
-                    float u = (i == 1 || i == 2) ? u2 : u1;
-                    float v = (i == 2 || i == 3) ? v1 : v2;
-                    vertices[vertexIndex++] = u;
-                    vertices[vertexIndex++] = v;
-                }
-                
-                // 添加2个三角形的索引
-                indices[indexIndex++] = currentVertex;
-                indices[indexIndex++] = currentVertex + 1;
-                indices[indexIndex++] = currentVertex + 2;
-                
-                indices[indexIndex++] = currentVertex + 2;
-                indices[indexIndex++] = currentVertex + 3;
-                indices[indexIndex++] = currentVertex;
-                
-                currentVertex += 4;
+                // 纹理坐标
+                float u = (i == 1 || i == 2) ? u2 : u1;
+                float v = (i == 2 || i == 3) ? v1 : v2;
+                vertices[vertexIndex++] = u;
+                vertices[vertexIndex++] = v;
             }
+            
+            // 添加2个三角形的索引
+            indices[indexIndex++] = currentVertex;
+            indices[indexIndex++] = currentVertex + 1;
+            indices[indexIndex++] = currentVertex + 2;
+            
+            indices[indexIndex++] = currentVertex + 2;
+            indices[indexIndex++] = currentVertex + 3;
+            indices[indexIndex++] = currentVertex;
+            
+            currentVertex += 4;
         }
         
         vertexCount = indices.length;
