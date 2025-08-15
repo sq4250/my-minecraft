@@ -3,11 +3,12 @@ package com.tsian;
 import static java.lang.Math.*;
 
 /**
- * 摄像头类 - 管理摄像头位置、方向和观察矩阵
+ * 摄像头类 - 管理摄像头视角和观察矩阵
+ * 位置由Player类管理
  */
 public class Camera {
     
-    // 摄像头位置
+    // 摄像头位置（从Player获取）
     private float x, y, z;
     
     // 摄像头方向 (欧拉角)
@@ -15,7 +16,6 @@ public class Camera {
     private float pitch; // 俯仰角 (绕X轴旋转)
     
     // 摄像头参数
-    private float moveSpeed = 5.0f;
     private float mouseSensitivity = 0.1f;
     
     // 摄像头向量
@@ -23,13 +23,22 @@ public class Camera {
     private float[] right = new float[3];
     private float[] up = {0.0f, 1.0f, 0.0f};
     
-    public Camera(float x, float y, float z) {
+    public Camera() {
+        this.x = 0.0f;
+        this.y = 0.0f;
+        this.z = 0.0f;
+        this.yaw = -90.0f;  // 初始方向朝向-Z轴（正前方）
+        this.pitch = 0.0f;
+        updateCameraVectors();
+    }
+    
+    /**
+     * 设置摄像头位置（由Player调用）
+     */
+    public void setPosition(float x, float y, float z) {
         this.x = x;
         this.y = y;
         this.z = z;
-        this.yaw = -90.0f;  // 初始方向朝向-Z轴
-        this.pitch = 0.0f;
-        updateCameraVectors();
     }
     
     /**
@@ -45,11 +54,10 @@ public class Camera {
     }
     
     /**
-     * 处理键盘输入移动
+     * 获取水平移动方向向量（用于Player移动计算）
      */
-    public void processKeyboardInput(boolean forward, boolean backward, boolean left, boolean right,
-                                   boolean up, boolean down, float deltaTime) {
-        float velocity = moveSpeed * deltaTime;
+    public float[] getMovementDirection(boolean forward, boolean backward, boolean left, boolean right) {
+        float moveX = 0, moveZ = 0;
         
         // 计算水平前向向量 (只在XZ平面移动，忽略Y分量)
         float[] horizontalFront = new float[3];
@@ -64,27 +72,30 @@ public class Camera {
         normalize(horizontalRight);
         
         if (forward) {
-            x += horizontalFront[0] * velocity;
-            z += horizontalFront[2] * velocity;
+            moveX += horizontalFront[0];
+            moveZ += horizontalFront[2];
         }
         if (backward) {
-            x -= horizontalFront[0] * velocity;
-            z -= horizontalFront[2] * velocity;
+            moveX -= horizontalFront[0];
+            moveZ -= horizontalFront[2];
         }
         if (left) {
-            x -= horizontalRight[0] * velocity;
-            z -= horizontalRight[2] * velocity;
+            moveX -= horizontalRight[0];
+            moveZ -= horizontalRight[2];
         }
         if (right) {
-            x += horizontalRight[0] * velocity;
-            z += horizontalRight[2] * velocity;
+            moveX += horizontalRight[0];
+            moveZ += horizontalRight[2];
         }
-        if (up) {
-            y += velocity;
+        
+        // 归一化移动向量
+        if (moveX != 0 || moveZ != 0) {
+            float length = (float) Math.sqrt(moveX * moveX + moveZ * moveZ);
+            moveX /= length;
+            moveZ /= length;
         }
-        if (down) {
-            y -= velocity;
-        }
+        
+        return new float[]{moveX, moveZ};
     }
     
     /**
@@ -227,4 +238,38 @@ public class Camera {
     public float[] getFrontVector() {
         return new float[]{front[0], front[1], front[2]};
     }
+    
+    /**
+     * 生成从摄像头到屏幕中心的精确射线方向
+     * 这个方法确保射线精确指向屏幕正中央
+     */
+    public float[] getCenterRayDirection() {
+        // 直接返回归一化的前向量，确保它指向屏幕中心
+        float[] direction = new float[3];
+        direction[0] = front[0];
+        direction[1] = front[1];
+        direction[2] = front[2];
+        
+        // 确保向量已经归一化
+        float length = (float) Math.sqrt(direction[0] * direction[0] +
+                                        direction[1] * direction[1] +
+                                        direction[2] * direction[2]);
+        if (length > 0) {
+            direction[0] /= length;
+            direction[1] /= length;
+            direction[2] /= length;
+        }
+        
+        return direction;
+    }
+    
+    /**
+     * 获取偏航角
+     */
+    public float getYaw() { return yaw; }
+    
+    /**
+     * 获取俯仰角
+     */
+    public float getPitch() { return pitch; }
 }

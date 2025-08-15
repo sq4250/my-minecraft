@@ -1,89 +1,94 @@
 package com.tsian.world;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * 世界类 - 优化的方块世界
+ * 世界类 - 基于区块的无限世界
  */
 public class World {
     
-    private List<Block> blocks;
-    private Map<String, Block> blockMap; // 快速查找映射
+    private ChunkManager chunkManager; // 区块管理器
     private List<VisibleFace> cachedVisibleFaces; // 缓存的可见面
+    private boolean needsVisibleFaceUpdate = true; // 是否需要更新可见面
+    
+    // 玩家位置跟踪
+    private float lastPlayerX = Float.MAX_VALUE;
+    private float lastPlayerZ = Float.MAX_VALUE;
     
     public World() {
-        this.blocks = new ArrayList<>();
-        this.blockMap = new HashMap<>();
-        generateSimpleWorld();
-        calculateVisibleFaces(); // 预计算可见面
-        System.out.println("Initialized optimized world with " + blocks.size() + " blocks, " +
-                          cachedVisibleFaces.size() + " visible faces");
+        this.chunkManager = new ChunkManager();
+        this.cachedVisibleFaces = new ArrayList<>();
+        System.out.println("Initialized chunk-based infinite world");
     }
     
     /**
-     * 生成多层世界 - 泥土层为7x7
+     * 初始化世界（加载玩家周围的初始区块）
      */
-    private void generateSimpleWorld() {
-        blocks.clear();
-        
-        // 石头层 (y=0): 3x3
-        for (int x = -5; x <= 5; x++) {
-            for (int z = -5; z <= 5; z++) {
-                blocks.add(new Block(x, 0, z, Block.BlockType.STONE));
-            }
-        }
-        
-        // 泥土层 (y=1): 7x7
-        for (int x = -3; x <= 3; x++) {
-            for (int z = -3; z <= 3; z++) {
-                blocks.add(new Block(x, 1, z, Block.BlockType.DIRT));
-            }
-        }
-        
-        // 水层 (y=2): 3x3 (只在泥土中央区域)
-        for (int x = -1; x <= 1; x++) {
-            for (int z = -1; z <= 1; z++) {
-                blocks.add(new Block(x, 2, z, Block.BlockType.WATER));
-            }
-        }
-        
-        // 生成一棵树
-        generateTree(2, 1, 2);
-        
-        // 将方块添加到快速查找映射
-        for (Block block : blocks) {
-            blockMap.put(getBlockKey(block.getX(), block.getY(), block.getZ()), block);
-        }
+    public void initializeWorld(float playerX, float playerZ) {
+        chunkManager.loadInitialChunks(playerX, playerZ);
+        lastPlayerX = playerX;
+        lastPlayerZ = playerZ;
+        calculateVisibleFaces();
+        System.out.println("World initialized around player position (" + playerX + ", " + playerZ + ")");
+        System.out.println(chunkManager.getStats());
     }
     
     /**
-     * 获取方块键值（用于HashMap查找）
+     * 更新世界状态（基于玩家位置）
      */
-    private String getBlockKey(int x, int y, int z) {
-        return x + "," + y + "," + z;
+    public void updateWorld(float playerX, float playerZ) {
+        // 检查玩家是否移动了足够远的距离
+        float deltaX = Math.abs(playerX - lastPlayerX);
+        float deltaZ = Math.abs(playerZ - lastPlayerZ);
+        
+        if (deltaX > 8.0f || deltaZ > 8.0f) { // 移动超过半个区块
+            chunkManager.updateChunks(playerX, playerZ);
+            lastPlayerX = playerX;
+            lastPlayerZ = playerZ;
+            needsVisibleFaceUpdate = true;
+        }
+        
+        // 检查是否有区块需要重建
+        for (Chunk chunk : chunkManager.getLoadedChunks().values()) {
+            if (chunk.needsRebuild()) {
+                needsVisibleFaceUpdate = true;
+                break;
+            }
+        }
+        
+        // 更新可见面（如果需要）
+        if (needsVisibleFaceUpdate) {
+            calculateVisibleFaces();
+            needsVisibleFaceUpdate = false;
+        }
     }
     
     /**
-     * 预计算所有可见面
+     * 预计算所有可见面（基于区块）
      */
     private void calculateVisibleFaces() {
-        cachedVisibleFaces = new ArrayList<>();
+        cachedVisibleFaces.clear();
         
-        for (Block block : blocks) {
-            if (block.getType() == Block.BlockType.AIR) continue;
-            
-            // 检查每个面是否可见
-            for (int face = 0; face < 6; face++) {
-                if (isFaceVisible(block, face)) {
-                    cachedVisibleFaces.add(new VisibleFace(block, face));
+        // 遍历所有已加载区块中的方块
+        for (Chunk chunk : chunkManager.getLoadedChunks().values()) {
+            for (Block block : chunk.getBlocks().values()) {
+                if (block.getType() == Block.BlockType.AIR) continue;
+                
+                // 检查每个面是否可见
+                for (int face = 0; face < 6; face++) {
+                    if (isFaceVisible(block, face)) {
+                        cachedVisibleFaces.add(new VisibleFace(block, face));
+                    }
                 }
             }
+            
+            // 标记区块已重建
+            chunk.markRebuilt();
         }
         
-        System.out.println("Pre-calculated " + cachedVisibleFaces.size() + " visible faces");
+        System.out.println("Calculated " + cachedVisibleFaces.size() + " visible faces from " + 
+                          chunkManager.getLoadedChunks().size() + " chunks");
     }
     
     /**
@@ -150,25 +155,64 @@ public class World {
     }
     
     /**
-     * 获取指定位置的方块（O(1)查找）
+     * 获取指定位置的方块
      */
-    private Block getBlockAt(int x, int y, int z) {
-        return blockMap.get(getBlockKey(x, y, z));
+    public Block getBlockAt(int x, int y, int z) {
+        return chunkManager.getBlockAt(x, y, z);
     }
     
     /**
-     * 获取所有方块
+     * 获取所有方块（从所有已加载区块）
      */
     public List<Block> getBlocks() {
-        return blocks;
+        List<Block> allBlocks = new ArrayList<>();
+        for (Chunk chunk : chunkManager.getLoadedChunks().values()) {
+            allBlocks.addAll(chunk.getBlocks().values());
+        }
+        return allBlocks;
     }
     
     /**
      * 重新计算可见面（当方块被破坏后调用）
      */
     public void recalculateVisibleFaces() {
-        calculateVisibleFaces();
-        System.out.println("Recalculated visible faces: " + cachedVisibleFaces.size() + " faces");
+        needsVisibleFaceUpdate = true;
+    }
+    
+    /**
+     * 添加新方块到世界中
+     */
+    public boolean addBlock(int x, int y, int z, Block.BlockType blockType) {
+        boolean success = chunkManager.addBlock(x, y, z, blockType);
+        if (success) {
+            needsVisibleFaceUpdate = true;
+        }
+        return success;
+    }
+    
+    /**
+     * 移除指定位置的方块（设置为空气）
+     */
+    public boolean removeBlockAt(int x, int y, int z) {
+        boolean success = chunkManager.removeBlock(x, y, z);
+        if (success) {
+            needsVisibleFaceUpdate = true;
+        }
+        return success;
+    }
+    
+    /**
+     * 获取区块管理器统计信息
+     */
+    public String getChunkStats() {
+        return chunkManager.getStats();
+    }
+    
+    /**
+     * 获取区块管理器（用于调试）
+     */
+    public ChunkManager getChunkManager() {
+        return chunkManager;
     }
     
     /**
@@ -182,96 +226,5 @@ public class World {
             this.block = block;
             this.face = face;
         }
-    }
-    
-    /**
-     * 在指定位置生成一棵美观的树
-     */
-    private void generateTree(int baseX, int baseY, int baseZ) {
-        // 生成树干 (6格高，更高一些)
-        for (int y = 0; y < 6; y++) {
-            blocks.add(new Block(baseX, baseY + y, baseZ, Block.BlockType.WOOD_LOG));
-        }
-        
-        // 生成更自然的树冠形状
-        generateTreeCanopy(baseX, baseY, baseZ);
-    }
-    
-    /**
-     * 生成宽大的自然树冠（向上平移，只留1格树干侵入）
-     */
-    private void generateTreeCanopy(int centerX, int centerY, int centerZ) {
-        int canopyStartY = centerY + 5; // 从第6层开始，树干最顶部y+5侵入树叶
-        
-        // 底层 (y+5): 超大圆形，半径4，跳过树干（树干侵入这一层）
-        for (int x = centerX - 4; x <= centerX + 4; x++) {
-            for (int z = centerZ - 4; z <= centerZ + 4; z++) {
-                // 跳过树干位置
-                if (x == centerX && z == centerZ) {
-                    continue;
-                }
-                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
-                if (dist <= 3.8f) {
-                    // 边缘稀疏一些，形成更自然的形状
-                    if (dist < 3.0f || (dist < 3.5f && (Math.abs(x - centerX) <= 2 || Math.abs(z - centerZ) <= 2))) {
-                        blocks.add(new Block(x, canopyStartY, z, Block.BlockType.LEAVES));
-                    }
-                }
-            }
-        }
-        
-        // 第二层 (y+6): 大圆形，半径3.5
-        for (int x = centerX - 3; x <= centerX + 3; x++) {
-            for (int z = centerZ - 3; z <= centerZ + 3; z++) {
-                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
-                if (dist <= 3.3f) {
-                    blocks.add(new Block(x, canopyStartY + 1, z, Block.BlockType.LEAVES));
-                }
-            }
-        }
-        
-        // 第三层 (y+7): 圆形，半径3
-        for (int x = centerX - 3; x <= centerX + 3; x++) {
-            for (int z = centerZ - 3; z <= centerZ + 3; z++) {
-                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
-                if (dist <= 2.8f) {
-                    blocks.add(new Block(x, canopyStartY + 2, z, Block.BlockType.LEAVES));
-                }
-            }
-        }
-        
-        // 第四层 (y+8): 圆形，半径2.5
-        for (int x = centerX - 2; x <= centerX + 2; x++) {
-            for (int z = centerZ - 2; z <= centerZ + 2; z++) {
-                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
-                if (dist <= 2.3f) {
-                    blocks.add(new Block(x, canopyStartY + 3, z, Block.BlockType.LEAVES));
-                }
-            }
-        }
-        
-        // 第五层 (y+9): 圆形，半径2
-        for (int x = centerX - 2; x <= centerX + 2; x++) {
-            for (int z = centerZ - 2; z <= centerZ + 2; z++) {
-                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
-                if (dist <= 1.8f) {
-                    blocks.add(new Block(x, canopyStartY + 4, z, Block.BlockType.LEAVES));
-                }
-            }
-        }
-        
-        // 顶层 (y+10): 十字形 + 中心
-        blocks.add(new Block(centerX, canopyStartY + 5, centerZ, Block.BlockType.LEAVES));
-        blocks.add(new Block(centerX - 1, canopyStartY + 5, centerZ, Block.BlockType.LEAVES));
-        blocks.add(new Block(centerX + 1, canopyStartY + 5, centerZ, Block.BlockType.LEAVES));
-        blocks.add(new Block(centerX, canopyStartY + 5, centerZ - 1, Block.BlockType.LEAVES));
-        blocks.add(new Block(centerX, canopyStartY + 5, centerZ + 1, Block.BlockType.LEAVES));
-        
-        // 增加更多不规则的树叶让大树冠更自然
-        // 在外围添加一些突出的树叶
-        blocks.add(new Block(centerX - 4, canopyStartY + 1, centerZ, Block.BlockType.LEAVES));
-        blocks.add(new Block(centerX + 4, canopyStartY + 1, centerZ, Block.BlockType.LEAVES));
-        blocks.add(new Block(centerX, canopyStartY + 1, centerZ - 4, Block.BlockType.LEAVES));
-        blocks.add(new Block(centerX, canopyStartY + 1, centerZ + 4, Block.BlockType.LEAVES));
     }
 }

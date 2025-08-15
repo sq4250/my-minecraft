@@ -86,27 +86,33 @@ public class UIRenderer {
         
         glUseProgram(shaderProgram);
         
-        // 设置十字标记颜色（白色带透明边框）
+        // 设置十字标记颜色（白色）
         int colorLocation = glGetUniformLocation(shaderProgram, "color");
         glUniform3f(colorLocation, 1.0f, 1.0f, 1.0f);
         
-        // 计算十字标记大小（相对于屏幕尺寸）
-        float crosshairSize = 0.03f; // 屏幕尺寸的3%
-        float lineWidth = 0.002f;    // 线条宽度
+        // 固定像素大小的十字准心 - 不随窗口尺寸变化
+        float crosshairLengthPixels = 25.0f; // 十字长度：15像素
+        float crosshairWidthPixels = 2.0f;   // 十字宽度：2像素
+        
+        // 将像素转换为NDC坐标
+        float crosshairLength = crosshairLengthPixels / (float) screenWidth * 2.0f; // 水平方向
+        float crosshairHeight = crosshairLengthPixels / (float) screenHeight * 2.0f; // 垂直方向
+        float lineWidth = crosshairWidthPixels / (float) screenWidth * 2.0f; // 水平线宽度
+        float lineHeight = crosshairWidthPixels / (float) screenHeight * 2.0f; // 垂直线高度
         
         // 创建十字标记顶点数据（两条线：水平和垂直）
         float[] vertices = {
             // 水平线
-            -crosshairSize, -lineWidth,  // 左下
-             crosshairSize, -lineWidth,  // 右下
-             crosshairSize,  lineWidth,  // 右上
-            -crosshairSize,  lineWidth,  // 左上
+            -crosshairLength * 0.5f, -lineHeight * 0.5f,  // 左下
+             crosshairLength * 0.5f, -lineHeight * 0.5f,  // 右下
+             crosshairLength * 0.5f,  lineHeight * 0.5f,  // 右上
+            -crosshairLength * 0.5f,  lineHeight * 0.5f,  // 左上
             
             // 垂直线
-            -lineWidth, -crosshairSize,  // 左下
-             lineWidth, -crosshairSize,  // 右下
-             lineWidth,  crosshairSize,  // 右上
-            -lineWidth,  crosshairSize   // 左上
+            -lineWidth * 0.5f, -crosshairHeight * 0.5f,  // 左下
+             lineWidth * 0.5f, -crosshairHeight * 0.5f,  // 右下
+             lineWidth * 0.5f,  crosshairHeight * 0.5f,  // 右上
+            -lineWidth * 0.5f,  crosshairHeight * 0.5f   // 左上
         };
         
         int[] indices = {

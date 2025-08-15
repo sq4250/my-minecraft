@@ -1,6 +1,7 @@
 package com.tsian;
 
 import com.tsian.world.World;
+import com.tsian.world.Block;
 import com.tsian.render.SimpleRenderer;
 
 import org.lwjgl.glfw.GLFWErrorCallback;
@@ -47,8 +48,9 @@ public class MyMinecraft {
     // 世界和渲染
     private World world;
     
-    // 摄像头和时间
+    // 摄像头、玩家和时间
     private Camera camera;
+    private Player player;
     private float lastFrameTime;
     
     // 简化渲染器
@@ -178,6 +180,15 @@ public class MyMinecraft {
                         interactionManager.stopBreaking();
                     }
                 }
+            } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+                if (action == GLFW_PRESS) {
+                    if (!mouseCaptured) {
+                        captureMouse();
+                    } else {
+                        // 放置木板方块
+                        handleRightClick();
+                    }
+                }
             }
         });
         
@@ -201,9 +212,16 @@ public class MyMinecraft {
         glfwSwapInterval(1); // 启用v-sync
         glfwShowWindow(window);
         
-        // 初始化摄像头和世界
-        camera = new Camera(0.0f, 2.0f, 5.0f); // 调整摄像头位置
+        // 初始化摄像头、玩家和世界
+        camera = new Camera();
         world = new World();
+        
+        // 创建玩家并设置初始位置（在空岛中心）
+        player = new Player(32.0f, 8.0f, 32.0f, world);
+        
+        // 初始化基于区块的世界
+        world.initializeWorld(player.getX(), player.getZ());
+        
         interactionManager = new BlockInteractionManager(world);
         lastFrameTime = (float) glfwGetTime();
     }
@@ -251,8 +269,18 @@ public class MyMinecraft {
             float deltaTime = currentFrameTime - lastFrameTime;
             lastFrameTime = currentFrameTime;
             
-            // 处理输入
+            // 处理输入和更新玩家
             processInput(deltaTime);
+            
+            // 更新玩家物理和位置
+            player.update(deltaTime);
+            
+            // 更新摄像头位置（跟随玩家）
+            float[] cameraPos = player.getCameraPosition();
+            camera.setPosition(cameraPos[0], cameraPos[1], cameraPos[2]);
+            
+            // 更新世界状态（区块加载/卸载）
+            world.updateWorld(player.getX(), player.getZ());
             
             // 更新方块交互
             updateBlockInteraction(currentFrameTime);
@@ -271,10 +299,14 @@ public class MyMinecraft {
         boolean backward = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
         boolean left = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
         boolean right = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
-        boolean up = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-        boolean down = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+        boolean jump = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+        boolean shift = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS; // 改为shift键
         
-        camera.processKeyboardInput(forward, backward, left, right, up, down, deltaTime);
+        // 获取摄像头方向并传递给玩家
+        float[] moveDir = camera.getMovementDirection(forward, backward, left, right);
+        
+        // 使用基于摄像头方向的移动（shift用于飞行下降或地面冲刺）
+        player.handleInput(moveDir, jump, shift, deltaTime);
     }
     
     /**
@@ -283,8 +315,8 @@ public class MyMinecraft {
     private void handleMouseClick() {
         if (!mouseCaptured || interactionManager == null) return;
         
-        // 计算摄像头方向向量
-        float[] cameraDirection = camera.getFrontVector();
+        // 使用精确的屏幕中心射线方向
+        float[] cameraDirection = camera.getCenterRayDirection();
         
         // 执行射线投射
         BlockInteractionManager.RaycastResult result = interactionManager.raycast(
@@ -299,13 +331,41 @@ public class MyMinecraft {
     }
     
     /**
+     * 处理右键点击（放置木板）
+     */
+    private void handleRightClick() {
+        if (!mouseCaptured || interactionManager == null) return;
+        
+        // 使用精确的屏幕中心射线方向
+        float[] cameraDirection = camera.getCenterRayDirection();
+        
+        // 尝试放置木板方块
+        boolean success = interactionManager.placeBlock(
+            camera.getX(), camera.getY(), camera.getZ(),
+            cameraDirection[0], cameraDirection[1], cameraDirection[2],
+            Block.BlockType.WOOD_PLANK
+        );
+        
+        if (success) {
+            // 如果放置成功，重新构建渲染缓冲区
+            if (interactionManager.needsMeshRebuild()) {
+                simpleRenderer.buildMeshFromWorld(world);
+                interactionManager.markMeshRebuilt();
+            }
+            System.out.println("木板放置成功!");
+        } else {
+            System.out.println("无法在此位置放置木板");
+        }
+    }
+    
+    /**
      * 更新方块交互
      */
     private void updateBlockInteraction(float currentTime) {
         if (interactionManager == null) return;
         
-        // 执行射线投射检查目标方块
-        float[] cameraDirection = camera.getFrontVector();
+        // 使用精确的屏幕中心射线方向
+        float[] cameraDirection = camera.getCenterRayDirection();
         BlockInteractionManager.RaycastResult result = interactionManager.raycast(
             camera.getX(), camera.getY(), camera.getZ(),
             cameraDirection[0], cameraDirection[1], cameraDirection[2]
@@ -455,10 +515,10 @@ public class MyMinecraft {
         shaderManager.uploadMatrix4f(shaderProgram, "projection", projectionMatrix);
         
         // 简化渲染 - 传递摄像头位置用于透明方块排序
-        
-        // 渲染UI元素（十字标记）- 暂时禁用
-        // uiRenderer.renderCrosshair(currentWidth, currentHeight);
         simpleRenderer.render(textureId, camera.getX(), camera.getY(), camera.getZ());
+        
+        // 渲染UI元素（十字标记）
+        uiRenderer.renderCrosshair(currentWidth, currentHeight);
     }
     
     
