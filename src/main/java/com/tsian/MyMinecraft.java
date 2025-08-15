@@ -179,7 +179,7 @@ public class MyMinecraft {
         glfwShowWindow(window);
         
         // 初始化摄像头和世界
-        camera = new Camera(0.0f, 2.0f, 5.0f); // 调整摄像头位置以更好观察3x3x3世界
+        camera = new Camera(0.0f, 2.0f, 5.0f); // 调整摄像头位置
         world = new World();
         lastFrameTime = (float) glfwGetTime();
     }
@@ -349,6 +349,9 @@ public class MyMinecraft {
         int textureLocation = glGetUniformLocation(shaderProgram, "ourTexture");
         glUniform1i(textureLocation, 0);
         
+        // 设置光照参数
+        setupLighting();
+        
         // 创建变换矩阵
         float[] modelMatrix = createModelMatrix();
         float[] viewMatrix = camera.getViewMatrix();
@@ -359,8 +362,8 @@ public class MyMinecraft {
         shaderManager.uploadMatrix4f(shaderProgram, "view", viewMatrix);
         shaderManager.uploadMatrix4f(shaderProgram, "projection", projectionMatrix);
         
-        // 简化渲染 - 直接使用预构建的几何数据
-        simpleRenderer.render(textureId);
+        // 简化渲染 - 传递摄像头位置用于透明方块排序
+        simpleRenderer.render(textureId, camera.getX(), camera.getY(), camera.getZ());
     }
     
     
@@ -371,6 +374,26 @@ public class MyMinecraft {
         return model;
     }
     
+    /**
+     * 设置光照参数
+     */
+    private void setupLighting() {
+        // 固定的全局光照方向（从右上前方照射，角度更温和）
+        int lightDirLocation = glGetUniformLocation(shaderProgram, "lightDirection");
+        glUniform3f(lightDirLocation, 0.6f, -0.8f, 0.4f);
+        
+        // 光照颜色（温暖的白色，稍微降低强度）
+        int lightColorLocation = glGetUniformLocation(shaderProgram, "lightColor");
+        glUniform3f(lightColorLocation, 0.9f, 0.85f, 0.7f);
+        
+        // 环境光颜色（更温暖的蓝白色，增加整体亮度）
+        int ambientColorLocation = glGetUniformLocation(shaderProgram, "ambientColor");
+        glUniform3f(ambientColorLocation, 0.6f, 0.7f, 0.9f);
+        
+        // 环境光强度（提高基础亮度）
+        int ambientStrengthLocation = glGetUniformLocation(shaderProgram, "ambientStrength");
+        glUniform1f(ambientStrengthLocation, 0.5f);
+    }
     
     private void cleanup() {
         // 清理简化渲染器

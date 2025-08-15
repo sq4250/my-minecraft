@@ -6,42 +6,62 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Comparator;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL30.*;
 
 /**
- * 简化的渲染器 - 直接渲染预计算的可见面，无多余优化
+ * 改进的渲染器 - 支持透明方块的深度排序
  */
 public class SimpleRenderer {
     
-    private static final int FLOATS_PER_VERTEX = 5; // x,y,z,u,v
+    private static final int FLOATS_PER_VERTEX = 9; // x,y,z,u,v,nx,ny,nz,blockType
     
-    // 渲染资源
-    private int vaoId;
-    private int vboId;
-    private int eboId;
-    private int vertexCount;
+    // 渲染资源 - 不透明方块
+    private int opaqueVaoId;
+    private int opaqueVboId;
+    private int opaqueEboId;
+    private int opaqueVertexCount;
+    
+    // 渲染资源 - 透明方块
+    private int transparentVaoId;
+    private int transparentVboId;
+    private int transparentEboId;
+    private int transparentVertexCount;
     
     // 渲染数据
-    private FloatBuffer vertexBuffer;
-    private IntBuffer indexBuffer;
+    private FloatBuffer opaqueVertexBuffer;
+    private IntBuffer opaqueIndexBuffer;
+    private FloatBuffer transparentVertexBuffer;
+    private IntBuffer transparentIndexBuffer;
     
     public SimpleRenderer() {
-        // 创建OpenGL资源
-        vaoId = glGenVertexArrays();
-        vboId = glGenBuffers();
-        eboId = glGenBuffers();
+        // 创建不透明方块的OpenGL资源
+        opaqueVaoId = glGenVertexArrays();
+        opaqueVboId = glGenBuffers();
+        opaqueEboId = glGenBuffers();
         
-        setupVertexArrayObject();
+        // 创建透明方块的OpenGL资源
+        transparentVaoId = glGenVertexArrays();
+        transparentVboId = glGenBuffers();
+        transparentEboId = glGenBuffers();
+        
+        setupVertexArrayObjects();
     }
     
     /**
      * 设置VAO属性
      */
-    private void setupVertexArrayObject() {
+    private void setupVertexArrayObjects() {
+        setupSingleVAO(opaqueVaoId, opaqueVboId, opaqueEboId);
+        setupSingleVAO(transparentVaoId, transparentVboId, transparentEboId);
+    }
+    
+    private void setupSingleVAO(int vaoId, int vboId, int eboId) {
         glBindVertexArray(vaoId);
         
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
@@ -55,6 +75,14 @@ public class SimpleRenderer {
         glVertexAttribPointer(1, 2, GL_FLOAT, false, FLOATS_PER_VERTEX * Float.BYTES, 3 * Float.BYTES);
         glEnableVertexAttribArray(1);
         
+        // 法向量属性 (location = 2)
+        glVertexAttribPointer(2, 3, GL_FLOAT, false, FLOATS_PER_VERTEX * Float.BYTES, 5 * Float.BYTES);
+        glEnableVertexAttribArray(2);
+        
+        // 方块类型属性 (location = 3)
+        glVertexAttribPointer(3, 1, GL_FLOAT, false, FLOATS_PER_VERTEX * Float.BYTES, 8 * Float.BYTES);
+        glEnableVertexAttribArray(3);
+        
         glBindVertexArray(0);
     }
     
@@ -65,42 +93,142 @@ public class SimpleRenderer {
         List<World.VisibleFace> visibleFaces = world.getVisibleFaces();
         
         if (visibleFaces.isEmpty()) {
-            vertexCount = 0;
+            opaqueVertexCount = 0;
+            transparentVertexCount = 0;
             return;
         }
         
-        // 计算所需缓冲区大小
-        int totalVertices = visibleFaces.size() * 4; // 每面4个顶点
-        int totalIndices = visibleFaces.size() * 6;  // 每面6个索引（2个三角形）
+        // 分离不透明和透明面
+        List<World.VisibleFace> opaqueFaces = new ArrayList<>();
+        List<World.VisibleFace> transparentFaces = new ArrayList<>();
         
-        // 分配缓冲区
-        vertexBuffer = MemoryUtil.memAllocFloat(totalVertices * FLOATS_PER_VERTEX);
-        indexBuffer = MemoryUtil.memAllocInt(totalIndices);
-        
-        int currentVertexOffset = 0;
-        
-        // 生成几何数据
-        for (World.VisibleFace visibleFace : visibleFaces) {
-            addFaceToBuffer(visibleFace.block, visibleFace.face, currentVertexOffset);
-            currentVertexOffset += 4;
+        for (World.VisibleFace face : visibleFaces) {
+            if (face.block.getType() == Block.BlockType.WATER || 
+                face.block.getType() == Block.BlockType.LEAVES) {
+                transparentFaces.add(face);
+            } else {
+                opaqueFaces.add(face);
+            }
         }
         
-        // 翻转缓冲区准备上传
-        vertexBuffer.flip();
-        indexBuffer.flip();
+        // 构建不透明面缓冲区
+        buildOpaqueBuffer(opaqueFaces);
         
-        // 上传到GPU
-        uploadBuffersToGPU();
+        // 构建透明面缓冲区（需要深度排序）
+        buildTransparentBuffer(transparentFaces);
         
-        vertexCount = totalIndices;
-        
-        System.out.println("Built mesh: " + totalVertices + " vertices, " + (totalIndices/3) + " triangles");
+        System.out.println("Built mesh: " + opaqueFaces.size() + " opaque faces, " + 
+                          transparentFaces.size() + " transparent faces");
     }
     
     /**
-     * 添加单个面的数据到缓冲区
+     * 构建不透明方块缓冲区
      */
-    private void addFaceToBuffer(Block block, int face, int vertexOffset) {
+    private void buildOpaqueBuffer(List<World.VisibleFace> opaqueFaces) {
+        if (opaqueFaces.isEmpty()) {
+            opaqueVertexCount = 0;
+            return;
+        }
+        
+        int totalVertices = opaqueFaces.size() * 4;
+        int totalIndices = opaqueFaces.size() * 6;
+        
+        opaqueVertexBuffer = MemoryUtil.memAllocFloat(totalVertices * FLOATS_PER_VERTEX);
+        opaqueIndexBuffer = MemoryUtil.memAllocInt(totalIndices);
+        
+        int currentVertexOffset = 0;
+        for (World.VisibleFace face : opaqueFaces) {
+            addFaceToBuffer(face.block, face.face, currentVertexOffset, opaqueVertexBuffer, opaqueIndexBuffer);
+            currentVertexOffset += 4;
+        }
+        
+        opaqueVertexBuffer.flip();
+        opaqueIndexBuffer.flip();
+        
+        uploadBuffersToGPU(opaqueVaoId, opaqueVboId, opaqueEboId, opaqueVertexBuffer, opaqueIndexBuffer);
+        opaqueVertexCount = totalIndices;
+    }
+    
+    // 存储透明面数据用于动态排序
+    private List<World.VisibleFace> transparentFaces;
+    
+    /**
+     * 构建透明方块缓冲区（不进行排序，留到渲染时动态排序）
+     */
+    private void buildTransparentBuffer(List<World.VisibleFace> transparentFaces) {
+        this.transparentFaces = new ArrayList<>(transparentFaces); // 保存透明面数据
+        
+        if (transparentFaces.isEmpty()) {
+            transparentVertexCount = 0;
+            return;
+        }
+        
+        int totalVertices = transparentFaces.size() * 4;
+        int totalIndices = transparentFaces.size() * 6;
+        
+        // 预分配最大缓冲区大小
+        transparentVertexBuffer = MemoryUtil.memAllocFloat(totalVertices * FLOATS_PER_VERTEX);
+        transparentIndexBuffer = MemoryUtil.memAllocInt(totalIndices);
+        
+        // 初始时不上传数据，在渲染时动态生成
+        transparentVertexCount = totalIndices;
+    }
+    
+    /**
+     * 根据摄像头位置重新排序并更新透明方块缓冲区
+     */
+    private void updateTransparentBuffer(float cameraX, float cameraY, float cameraZ) {
+        if (transparentFaces == null || transparentFaces.isEmpty()) {
+            return;
+        }
+        
+        // 按距离摄像头的距离排序（从远到近）
+        transparentFaces.sort(new Comparator<World.VisibleFace>() {
+            @Override
+            public int compare(World.VisibleFace a, World.VisibleFace b) {
+                // 计算面的中心点
+                float centerAX = a.block.getX();
+                float centerAY = a.block.getY();
+                float centerAZ = a.block.getZ();
+                
+                float centerBX = b.block.getX();
+                float centerBY = b.block.getY();
+                float centerBZ = b.block.getZ();
+                
+                // 计算到摄像头的距离平方
+                float distA = (centerAX - cameraX) * (centerAX - cameraX) +
+                             (centerAY - cameraY) * (centerAY - cameraY) +
+                             (centerAZ - cameraZ) * (centerAZ - cameraZ);
+                             
+                float distB = (centerBX - cameraX) * (centerBX - cameraX) +
+                             (centerBY - cameraY) * (centerBY - cameraY) +
+                             (centerBZ - cameraZ) * (centerBZ - cameraZ);
+                
+                return Float.compare(distB, distA); // 从远到近
+            }
+        });
+        
+        // 重新生成缓冲区数据
+        transparentVertexBuffer.clear();
+        transparentIndexBuffer.clear();
+        
+        int currentVertexOffset = 0;
+        for (World.VisibleFace face : transparentFaces) {
+            addFaceToBuffer(face.block, face.face, currentVertexOffset, transparentVertexBuffer, transparentIndexBuffer);
+            currentVertexOffset += 4;
+        }
+        
+        transparentVertexBuffer.flip();
+        transparentIndexBuffer.flip();
+        
+        // 重新上传到GPU
+        uploadBuffersToGPU(transparentVaoId, transparentVboId, transparentEboId, transparentVertexBuffer, transparentIndexBuffer);
+    }
+    
+    /**
+     * 添加单个面的数据到指定缓冲区
+     */
+    private void addFaceToBuffer(Block block, int face, int vertexOffset, FloatBuffer vertexBuffer, IntBuffer indexBuffer) {
         float blockX = block.getX();
         float blockY = block.getY();
         float blockZ = block.getZ();
@@ -113,6 +241,9 @@ public class SimpleRenderer {
         float u1 = texCoords[0], v1 = texCoords[1];
         float u2 = texCoords[2], v2 = texCoords[3];
         
+        // 获取面法向量
+        float[] normal = getFaceNormal(face);
+        
         // 添加4个顶点数据
         for (int i = 0; i < 4; i++) {
             vertexBuffer.put(vertices[i][0]); // x
@@ -124,6 +255,14 @@ public class SimpleRenderer {
             float v = (i == 2 || i == 3) ? v1 : v2;
             vertexBuffer.put(u);
             vertexBuffer.put(v);
+            
+            // 法向量
+            vertexBuffer.put(normal[0]); // nx
+            vertexBuffer.put(normal[1]); // ny
+            vertexBuffer.put(normal[2]); // nz
+            
+            // 方块类型ID
+            vertexBuffer.put((float) block.getType().getId());
         }
         
         // 添加索引（2个三角形）
@@ -187,7 +326,7 @@ public class SimpleRenderer {
     /**
      * 上传缓冲区数据到GPU
      */
-    private void uploadBuffersToGPU() {
+    private void uploadBuffersToGPU(int vaoId, int vboId, int eboId, FloatBuffer vertexBuffer, IntBuffer indexBuffer) {
         glBindVertexArray(vaoId);
         
         // 上传顶点数据
@@ -204,14 +343,27 @@ public class SimpleRenderer {
     /**
      * 渲染（每帧调用）
      */
-    public void render(int textureId) {
-        if (vertexCount == 0) return;
-        
-        glBindVertexArray(vaoId);
+    public void render(int textureId, float cameraX, float cameraY, float cameraZ) {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, textureId);
         
-        glDrawElements(GL_TRIANGLES, vertexCount, GL_UNSIGNED_INT, 0);
+        // 先渲染不透明方块（启用背面剔除）
+        if (opaqueVertexCount > 0) {
+            glEnable(GL_CULL_FACE);
+            glBindVertexArray(opaqueVaoId);
+            glDrawElements(GL_TRIANGLES, opaqueVertexCount, GL_UNSIGNED_INT, 0);
+        }
+        
+        // 更新并渲染透明方块（禁用背面剔除）
+        if (transparentVertexCount > 0) {
+            // 每帧重新排序透明方块
+            updateTransparentBuffer(cameraX, cameraY, cameraZ);
+            
+            glDisable(GL_CULL_FACE);
+            glBindVertexArray(transparentVaoId);
+            glDrawElements(GL_TRIANGLES, transparentVertexCount, GL_UNSIGNED_INT, 0);
+            glEnable(GL_CULL_FACE); // 恢复背面剔除
+        }
         
         glBindVertexArray(0);
     }
@@ -220,17 +372,44 @@ public class SimpleRenderer {
      * 清理资源
      */
     public void cleanup() {
-        if (vaoId != 0) glDeleteVertexArrays(vaoId);
-        if (vboId != 0) glDeleteBuffers(vboId);
-        if (eboId != 0) glDeleteBuffers(eboId);
+        if (opaqueVaoId != 0) glDeleteVertexArrays(opaqueVaoId);
+        if (opaqueVboId != 0) glDeleteBuffers(opaqueVboId);
+        if (opaqueEboId != 0) glDeleteBuffers(opaqueEboId);
         
-        if (vertexBuffer != null) {
-            MemoryUtil.memFree(vertexBuffer);
-            vertexBuffer = null;
+        if (transparentVaoId != 0) glDeleteVertexArrays(transparentVaoId);
+        if (transparentVboId != 0) glDeleteBuffers(transparentVboId);
+        if (transparentEboId != 0) glDeleteBuffers(transparentEboId);
+        
+        if (opaqueVertexBuffer != null) {
+            MemoryUtil.memFree(opaqueVertexBuffer);
+            opaqueVertexBuffer = null;
         }
-        if (indexBuffer != null) {
-            MemoryUtil.memFree(indexBuffer);
-            indexBuffer = null;
+        if (opaqueIndexBuffer != null) {
+            MemoryUtil.memFree(opaqueIndexBuffer);
+            opaqueIndexBuffer = null;
+        }
+        if (transparentVertexBuffer != null) {
+            MemoryUtil.memFree(transparentVertexBuffer);
+            transparentVertexBuffer = null;
+        }
+        if (transparentIndexBuffer != null) {
+            MemoryUtil.memFree(transparentIndexBuffer);
+            transparentIndexBuffer = null;
+        }
+    }
+    
+    /**
+     * 获取面的法向量
+     */
+    private float[] getFaceNormal(int face) {
+        switch (face) {
+            case 0: return new float[]{0.0f, 0.0f, 1.0f};  // 前面 (+Z)
+            case 1: return new float[]{0.0f, 0.0f, -1.0f}; // 后面 (-Z)
+            case 2: return new float[]{-1.0f, 0.0f, 0.0f}; // 左面 (-X)
+            case 3: return new float[]{1.0f, 0.0f, 0.0f};  // 右面 (+X)
+            case 4: return new float[]{0.0f, 1.0f, 0.0f};  // 上面 (+Y)
+            case 5: return new float[]{0.0f, -1.0f, 0.0f}; // 下面 (-Y)
+            default: return new float[]{0.0f, 1.0f, 0.0f};
         }
     }
 }

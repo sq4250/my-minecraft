@@ -1,14 +1,29 @@
 #version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec2 aTexCoord;
+layout (location = 2) in vec3 aNormal;
+layout (location = 3) in float aBlockType;
 
 out vec2 TexCoord;
+out vec3 Normal;
+out vec3 FragPos;
+out float BlockType;
 
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 
 void main() {
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    // 计算世界空间中的片段位置
+    FragPos = vec3(model * vec4(aPos, 1.0));
+    
+    // 将法向量转换到世界空间（假设没有非均匀缩放）
+    Normal = mat3(transpose(inverse(model))) * aNormal;
+    
+    // 传递纹理坐标和方块类型
     TexCoord = aTexCoord;
+    BlockType = aBlockType;
+    
+    // 计算最终位置
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
 }

@@ -49,6 +49,10 @@ public class World {
                 blocks.add(new Block(x, 2, z, Block.BlockType.WATER));
             }
         }
+        
+        // 生成一棵树
+        generateTree(2, 1, 2);
+        
         // 将方块添加到快速查找映射
         for (Block block : blocks) {
             blockMap.put(getBlockKey(block.getX(), block.getY(), block.getZ()), block);
@@ -117,24 +121,32 @@ public class World {
             return true;
         }
         
-        // 如果是相同类型的方块，面不可见（剔除）
+        // 如果是相同类型的方块，面不可见（剔除）- 包括同种透明方块
         if (block.getType() == adjacentBlock.getType()) {
             return false;
         }
         
-        // 水的特殊处理：
-        // 当前方块是水，相邻是任何非空气方块 -> 水面可见
-        if (block.getType() == Block.BlockType.WATER) {
+        // 透明方块的特殊处理
+        boolean currentIsTransparent = (block.getType() == Block.BlockType.WATER || block.getType() == Block.BlockType.LEAVES);
+        boolean adjacentIsTransparent = (adjacentBlock.getType() == Block.BlockType.WATER || adjacentBlock.getType() == Block.BlockType.LEAVES);
+        
+        // 如果当前方块是透明的，且相邻方块是不透明的，当前面不可见（剔除）
+        if (currentIsTransparent && !adjacentIsTransparent) {
+            return false;
+        }
+        
+        // 如果当前方块是不透明的，且相邻方块是透明的，当前面可见
+        if (!currentIsTransparent && adjacentIsTransparent) {
             return true;
         }
         
-        // 当前方块是固体，相邻是水 -> 固体面可见（透过水看到）
-        if (block.isSolid() && adjacentBlock.getType() == Block.BlockType.WATER) {
+        // 如果都是透明但不同类型，面可见
+        if (currentIsTransparent && adjacentIsTransparent) {
             return true;
         }
         
-        // 默认：相邻是固体则面不可见
-        return !adjacentBlock.isSolid();
+        // 默认：不透明方块之间的相邻面不可见
+        return false;
     }
     
     /**
@@ -162,5 +174,96 @@ public class World {
             this.block = block;
             this.face = face;
         }
+    }
+    
+    /**
+     * 在指定位置生成一棵美观的树
+     */
+    private void generateTree(int baseX, int baseY, int baseZ) {
+        // 生成树干 (6格高，更高一些)
+        for (int y = 0; y < 6; y++) {
+            blocks.add(new Block(baseX, baseY + y, baseZ, Block.BlockType.WOOD_LOG));
+        }
+        
+        // 生成更自然的树冠形状
+        generateTreeCanopy(baseX, baseY, baseZ);
+    }
+    
+    /**
+     * 生成宽大的自然树冠（向上平移，只留1格树干侵入）
+     */
+    private void generateTreeCanopy(int centerX, int centerY, int centerZ) {
+        int canopyStartY = centerY + 5; // 从第6层开始，树干最顶部y+5侵入树叶
+        
+        // 底层 (y+5): 超大圆形，半径4，跳过树干（树干侵入这一层）
+        for (int x = centerX - 4; x <= centerX + 4; x++) {
+            for (int z = centerZ - 4; z <= centerZ + 4; z++) {
+                // 跳过树干位置
+                if (x == centerX && z == centerZ) {
+                    continue;
+                }
+                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
+                if (dist <= 3.8f) {
+                    // 边缘稀疏一些，形成更自然的形状
+                    if (dist < 3.0f || (dist < 3.5f && (Math.abs(x - centerX) <= 2 || Math.abs(z - centerZ) <= 2))) {
+                        blocks.add(new Block(x, canopyStartY, z, Block.BlockType.LEAVES));
+                    }
+                }
+            }
+        }
+        
+        // 第二层 (y+6): 大圆形，半径3.5
+        for (int x = centerX - 3; x <= centerX + 3; x++) {
+            for (int z = centerZ - 3; z <= centerZ + 3; z++) {
+                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
+                if (dist <= 3.3f) {
+                    blocks.add(new Block(x, canopyStartY + 1, z, Block.BlockType.LEAVES));
+                }
+            }
+        }
+        
+        // 第三层 (y+7): 圆形，半径3
+        for (int x = centerX - 3; x <= centerX + 3; x++) {
+            for (int z = centerZ - 3; z <= centerZ + 3; z++) {
+                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
+                if (dist <= 2.8f) {
+                    blocks.add(new Block(x, canopyStartY + 2, z, Block.BlockType.LEAVES));
+                }
+            }
+        }
+        
+        // 第四层 (y+8): 圆形，半径2.5
+        for (int x = centerX - 2; x <= centerX + 2; x++) {
+            for (int z = centerZ - 2; z <= centerZ + 2; z++) {
+                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
+                if (dist <= 2.3f) {
+                    blocks.add(new Block(x, canopyStartY + 3, z, Block.BlockType.LEAVES));
+                }
+            }
+        }
+        
+        // 第五层 (y+9): 圆形，半径2
+        for (int x = centerX - 2; x <= centerX + 2; x++) {
+            for (int z = centerZ - 2; z <= centerZ + 2; z++) {
+                float dist = (float) Math.sqrt((x - centerX) * (x - centerX) + (z - centerZ) * (z - centerZ));
+                if (dist <= 1.8f) {
+                    blocks.add(new Block(x, canopyStartY + 4, z, Block.BlockType.LEAVES));
+                }
+            }
+        }
+        
+        // 顶层 (y+10): 十字形 + 中心
+        blocks.add(new Block(centerX, canopyStartY + 5, centerZ, Block.BlockType.LEAVES));
+        blocks.add(new Block(centerX - 1, canopyStartY + 5, centerZ, Block.BlockType.LEAVES));
+        blocks.add(new Block(centerX + 1, canopyStartY + 5, centerZ, Block.BlockType.LEAVES));
+        blocks.add(new Block(centerX, canopyStartY + 5, centerZ - 1, Block.BlockType.LEAVES));
+        blocks.add(new Block(centerX, canopyStartY + 5, centerZ + 1, Block.BlockType.LEAVES));
+        
+        // 增加更多不规则的树叶让大树冠更自然
+        // 在外围添加一些突出的树叶
+        blocks.add(new Block(centerX - 4, canopyStartY + 1, centerZ, Block.BlockType.LEAVES));
+        blocks.add(new Block(centerX + 4, canopyStartY + 1, centerZ, Block.BlockType.LEAVES));
+        blocks.add(new Block(centerX, canopyStartY + 1, centerZ - 4, Block.BlockType.LEAVES));
+        blocks.add(new Block(centerX, canopyStartY + 1, centerZ + 4, Block.BlockType.LEAVES));
     }
 }
