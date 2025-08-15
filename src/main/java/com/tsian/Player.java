@@ -34,13 +34,13 @@ public class Player {
     
     // 移动参数
     private float walkSpeed = 4.3f;     // 行走速度
-    private float sprintSpeed = 5.6f;   // 冲刺速度
+    private float sprintSpeed = 10.8f;   // 冲刺速度
     private float flySpeed = 10.8f;     // 飞行速度
     
     // 双击空格检测
     private boolean spacePressed = false;
     private float lastSpacePressTime = 0;
-    private static final float DOUBLE_CLICK_TIME = 0.2f; // 快速双击时间间隔
+    private static final float DOUBLE_CLICK_TIME = 0.3f; // 快速双击时间间隔（增加到0.3秒以提高检测成功率）
     
     // 世界引用
     private World world;
@@ -237,7 +237,7 @@ public class Player {
     public void handleInput(float[] moveDirection, boolean jump, boolean sprint, float deltaTime) {
         
         // 双击空格检测（需要传入当前时间）
-        handleSpaceDoubleClick(jump, (float) System.currentTimeMillis() / 1000.0f);
+        handleSpaceDoubleClick(jump);
         
         if (isFlying) {
             // 飞行模式输入处理
@@ -251,7 +251,10 @@ public class Player {
     /**
      * 处理双击空格检测
      */
-    private void handleSpaceDoubleClick(boolean currentSpacePressed, float currentTime) {
+    private void handleSpaceDoubleClick(boolean currentSpacePressed) {
+        // 使用纳秒计时器获取更精确的时间（转换为秒）
+        float currentTime = System.nanoTime() / 1_000_000_000.0f;
+        
         if (currentSpacePressed && !spacePressed) {
             // 空格刚按下
             if (currentTime - lastSpacePressTime < DOUBLE_CLICK_TIME) {

@@ -318,9 +318,13 @@ public class MyMinecraft {
         // 使用精确的屏幕中心射线方向
         float[] cameraDirection = camera.getCenterRayDirection();
         
-        // 执行射线投射
+        // 执行射线投射（从摄像头位置稍微向前偏移一点，确保射线从摄像头中心发出）
+        float rayStartX = camera.getX() + cameraDirection[0] * 0.1f;
+        float rayStartY = camera.getY() + cameraDirection[1] * 0.1f;
+        float rayStartZ = camera.getZ() + cameraDirection[2] * 0.1f;
+        
         BlockInteractionManager.RaycastResult result = interactionManager.raycast(
-            camera.getX(), camera.getY(), camera.getZ(),
+            rayStartX, rayStartY, rayStartZ,
             cameraDirection[0], cameraDirection[1], cameraDirection[2]
         );
         
@@ -339,9 +343,14 @@ public class MyMinecraft {
         // 使用精确的屏幕中心射线方向
         float[] cameraDirection = camera.getCenterRayDirection();
         
+        // 射线起点稍微向前偏移一点，确保射线从摄像头中心发出
+        float rayStartX = camera.getX() + cameraDirection[0] * 0.1f;
+        float rayStartY = camera.getY() + cameraDirection[1] * 0.1f;
+        float rayStartZ = camera.getZ() + cameraDirection[2] * 0.1f;
+        
         // 尝试放置木板方块
         boolean success = interactionManager.placeBlock(
-            camera.getX(), camera.getY(), camera.getZ(),
+            rayStartX, rayStartY, rayStartZ,
             cameraDirection[0], cameraDirection[1], cameraDirection[2],
             Block.BlockType.WOOD_PLANK
         );
@@ -366,8 +375,14 @@ public class MyMinecraft {
         
         // 使用精确的屏幕中心射线方向
         float[] cameraDirection = camera.getCenterRayDirection();
+        
+        // 射线起点稍微向前偏移一点，确保射线从摄像头中心发出
+        float rayStartX = camera.getX() + cameraDirection[0] * 0.1f;
+        float rayStartY = camera.getY() + cameraDirection[1] * 0.1f;
+        float rayStartZ = camera.getZ() + cameraDirection[2] * 0.1f;
+        
         BlockInteractionManager.RaycastResult result = interactionManager.raycast(
-            camera.getX(), camera.getY(), camera.getZ(),
+            rayStartX, rayStartY, rayStartZ,
             cameraDirection[0], cameraDirection[1], cameraDirection[2]
         );
         
@@ -386,6 +401,8 @@ public class MyMinecraft {
                 
                 // 检查是否需要重新构建渲染缓冲区（方块被破坏后）
                 if (interactionManager.needsMeshRebuild()) {
+                    // 确保可见面已更新后再重建网格
+                    world.updateWorld(player.getX(), player.getZ());
                     simpleRenderer.buildMeshFromWorld(world);
                     interactionManager.markMeshRebuilt();
                 }

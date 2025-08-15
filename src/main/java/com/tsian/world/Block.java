@@ -61,6 +61,8 @@ public class Block {
     public float[] getTextureCoords(int face) {
         // face: 0=前, 1=后, 2=左, 3=右, 4=上, 5=下
         switch (type) {
+            case AIR: // 空气方块不渲染，返回空纹理坐标
+                return new float[]{0.0f, 0.0f, 0.0f, 0.0f};
             case GRASS:
                 if (face == 4) { // 上面 - 草上表面 (位置3)
                     return new float[]{32.0f/64.0f, 0.0f, 48.0f/64.0f, 16.0f/48.0f};
@@ -86,7 +88,7 @@ public class Block {
             case WATER: // 水静态纹理 (位置9)
                 return new float[]{0.0f/64.0f, 32.0f/48.0f, 16.0f/64.0f, 48.0f/48.0f};
             default:
-                return new float[]{0.0f, 0.0f, 16.0f/64.0f, 16.0f/48.0f};
+                return new float[]{0.0f, 0.0f, 0.0f, 0.0f};
         }
     }
 }
