@@ -83,8 +83,14 @@ public class ChunkManager {
                     Math.pow(worldX - centerX, 2) + Math.pow(worldZ - centerZ, 2)
                 );
                 
-                // 空岛半径约28格，边缘有渐变
-                if (distanceToCenter <= 24) {
+                // 检查是否在水池区域内（中心附近5格半径）
+                if (distanceToCenter <= 5.0f) {
+                    // 创建水池：在地面高度放置水方块，替换草方块
+                    chunk.setBlock(worldX, 0, worldZ, Block.BlockType.STONE);    // 底层：圆石
+                    chunk.setBlock(worldX, 1, worldZ, Block.BlockType.DIRT);     // 第二层：泥块
+                    chunk.setBlock(worldX, 2, worldZ, Block.BlockType.DIRT);     // 第三层：泥块
+                    chunk.setBlock(worldX, 3, worldZ, Block.BlockType.WATER);    // 顶层：水方块（替换草方块）
+                } else if (distanceToCenter <= 24) {
                     // 核心区域：完整地形
                     generateFullTerrain(chunk, worldX, worldZ);
                 } else if (distanceToCenter <= 28) {
