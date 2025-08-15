@@ -1,53 +1,26 @@
 package com.tsian;
 
 import com.tsian.world.World;
-import com.tsian.world.Block;
 import com.tsian.world.BlockInteractionManager;
-import com.tsian.render.SimpleRenderer;
-import com.tsian.render.ShaderManager;
-import com.tsian.render.TextureLoader;
-import com.tsian.render.UIRenderer;
 
-import org.lwjgl.glfw.GLFWErrorCallback;
-import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
-import org.lwjgl.system.MemoryStack;
 
-import java.nio.IntBuffer;
-
-import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.system.MemoryStack.stackPush;
-import static org.lwjgl.system.MemoryUtil.NULL;
 
 /**
  * 简易版Minecraft - 使用LWJGL和现代OpenGL可编程管线开发
  */
 public class MyMinecraft {
     
-    // 窗口句柄
-    private long window;
+    // 窗口管理器
+    private WindowManager windowManager;
     
-    // 窗口尺寸
-    private static final int DEFAULT_WINDOW_WIDTH = 1024;
-    private static final int DEFAULT_WINDOW_HEIGHT = 768;
-    private static final String WINDOW_TITLE = "My Minecraft";
+    // 输入处理器
+    private InputHandler inputHandler;
     
-    // 当前窗口尺寸
-    private int currentWidth = DEFAULT_WINDOW_WIDTH;
-    private int currentHeight = DEFAULT_WINDOW_HEIGHT;
-    
-    // 全屏状态
-    private boolean isFullscreen = false;
-    private int windowedWidth = DEFAULT_WINDOW_WIDTH;
-    private int windowedHeight = DEFAULT_WINDOW_HEIGHT;
-    private int windowedPosX, windowedPosY;
-    
-    // 渲染相关变量
-    private int textureId;
-    private int shaderProgram;
+    // 渲染管理器
+    private RenderManager renderManager;
     
     // 世界和渲染
     private World world;
@@ -57,27 +30,11 @@ public class MyMinecraft {
     private Player player;
     private float lastFrameTime;
     
-    // 简化渲染器
-    private SimpleRenderer simpleRenderer;
-    
-    // 着色器管理器
-    private ShaderManager shaderManager;
-    
     // 方块交互管理器
     private BlockInteractionManager interactionManager;
     
-    // UI渲染器
-    private UIRenderer uiRenderer;
-    
-    // 鼠标状态
-    private boolean firstMouse = true;
-    private boolean mouseCaptured = false;
-    private float lastX = DEFAULT_WINDOW_WIDTH / 2.0f;
-    private float lastY = DEFAULT_WINDOW_HEIGHT / 2.0f;
-    
-    // 鼠标按键状态
-    private boolean leftMousePressed = false;
-    
+    // 标记是否需要重新构建网格
+    private boolean meshRebuildNeeded = false;
     
     public void run() {
         System.out.println("Starting My Minecraft with Modern OpenGL...");
@@ -88,21 +45,19 @@ public class MyMinecraft {
         // 清理资源
         cleanup();
         
-        // 释放窗口和窗口回调
-        glfwFreeCallbacks(window);
-        glfwDestroyWindow(window);
-        
-        // 终止GLFW并释放错误回调
-        glfwTerminate();
-        glfwSetErrorCallback(null).free();
+        // 清理窗口管理器资源
+        if (windowManager != null) {
+            windowManager.cleanup();
+        }
     }
     
     private void init() {
-        initGLFW();
-        createWindow();
-        setupCallbacks();
-        centerWindow();
-        showWindow();
+        // 初始化窗口管理器
+        windowManager = new WindowManager();
+        windowManager.initGLFW();
+        windowManager.createWindow();
+        windowManager.centerWindow();
+        windowManager.showWindow();
         
         // 初始化摄像头、玩家和世界
         camera = new Camera();
@@ -116,132 +71,10 @@ public class MyMinecraft {
         
         interactionManager = new BlockInteractionManager(world);
         lastFrameTime = (float) glfwGetTime();
-    }
-    
-    private void initGLFW() {
-        // 设置错误回调，将GLFW错误消息打印到System.err
-        GLFWErrorCallback.createPrint(System.err).set();
         
-        // 初始化GLFW
-        if (!glfwInit()) {
-            throw new IllegalStateException("Unable to initialize GLFW");
-        }
-        
-        // 配置GLFW - 使用OpenGL 3.3 Core Profile
-        glfwDefaultWindowHints();
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    }
-    
-    private void createWindow() {
-        // 创建窗口
-        window = glfwCreateWindow(currentWidth, currentHeight, WINDOW_TITLE, NULL, NULL);
-        if (window == NULL) {
-            throw new RuntimeException("Failed to create the GLFW window");
-        }
-    }
-    
-    private void setupCallbacks() {
-        // 设置键盘回调
-        glfwSetKeyCallback(window, (window, key, scancode, action, mods) -> {
-            if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
-                glfwSetWindowShouldClose(window, true);
-            }
-            // 按F1切换鼠标捕获模式
-            if (key == GLFW_KEY_F1 && action == GLFW_PRESS) {
-                toggleMouseCapture();
-            }
-            // 按F11切换全屏模式
-            if (key == GLFW_KEY_F11 && action == GLFW_PRESS) {
-                toggleFullscreen();
-            }
-        });
-        
-        // 设置窗口大小变化回调
-        glfwSetWindowSizeCallback(window, (window, width, height) -> {
-            currentWidth = width;
-            currentHeight = height;
-            glViewport(0, 0, width, height);
-            System.out.println("Window resized to: " + width + "x" + height);
-        });
-        
-        // 设置鼠标回调
-        glfwSetCursorPosCallback(window, (window, xpos, ypos) -> {
-            if (!mouseCaptured) return; // 只有在捕获模式下才处理鼠标移动
-            
-            if (firstMouse) {
-                lastX = (float) xpos;
-                lastY = (float) ypos;
-                firstMouse = false;
-                return; // 第一次移动时不处理偏移
-            }
-            
-            float xoffset = (float) xpos - lastX;
-            float yoffset = lastY - (float) ypos; // 反转Y轴，因为Y坐标从底部到顶部
-            
-            lastX = (float) xpos;
-            lastY = (float) ypos;
-            
-            // 立即处理鼠标移动，不等待下一帧
-            camera.processMouseMovement(xoffset, yoffset);
-        });
-        
-        // 鼠标点击回调，点击时捕获鼠标
-        glfwSetMouseButtonCallback(window, (window, button, action, mods) -> {
-            if (button == GLFW_MOUSE_BUTTON_LEFT) {
-                if (action == GLFW_PRESS) {
-                    if (!mouseCaptured) {
-                        captureMouse();
-                    } else {
-                        // 开始破坏方块
-                        leftMousePressed = true;
-                        handleMouseClick();
-                    }
-                } else if (action == GLFW_RELEASE) {
-                    // 停止破坏方块
-                    leftMousePressed = false;
-                    if (interactionManager != null) {
-                        interactionManager.stopBreaking();
-                    }
-                }
-            } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-                if (action == GLFW_PRESS) {
-                    if (!mouseCaptured) {
-                        captureMouse();
-                    } else {
-                        // 放置木板方块
-                        handleRightClick();
-                    }
-                }
-            }
-        });
-    }
-    
-    private void centerWindow() {
-        // 窗口居中
-        try (MemoryStack stack = stackPush()) {
-            IntBuffer pWidth = stack.mallocInt(1);
-            IntBuffer pHeight = stack.mallocInt(1);
-            
-            glfwGetWindowSize(window, pWidth, pHeight);
-            GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-            
-            glfwSetWindowPos(
-                window,
-                (vidmode.width() - pWidth.get(0)) / 2,
-                (vidmode.height() - pHeight.get(0)) / 2
-            );
-        }
-    }
-    
-    private void showWindow() {
-        // 使当前线程的OpenGL上下文为当前上下文
-        glfwMakeContextCurrent(window);
-        glfwSwapInterval(1); // 启用v-sync
-        glfwShowWindow(window);
+        // 初始化输入处理器
+        inputHandler = new InputHandler(this, windowManager, camera, player, interactionManager);
+        inputHandler.setupCallbacks();
     }
     
     private void loop() {
@@ -250,7 +83,7 @@ public class MyMinecraft {
         setupOpenGLState();
         
         // 主渲染循环
-        while (!glfwWindowShouldClose(window)) {
+        while (!glfwWindowShouldClose(windowManager.getWindow())) {
             processFrame();
         }
     }
@@ -267,7 +100,8 @@ public class MyMinecraft {
     private void initializeRenderResources() {
         // 初始化渲染资源
         try {
-            initRender();
+            renderManager = new RenderManager();
+            renderManager.initRender(world, interactionManager);
             System.out.println("Render initialization successful!");
         } catch (Exception e) {
             System.err.println("Failed to initialize render: " + e.getMessage());
@@ -303,7 +137,9 @@ public class MyMinecraft {
         lastFrameTime = currentFrameTime;
         
         // 处理输入和更新玩家
-        processInput(deltaTime);
+        if (inputHandler != null) {
+            inputHandler.processInput(deltaTime);
+        }
         
         // 更新玩家物理和位置
         player.update(deltaTime);
@@ -316,365 +152,58 @@ public class MyMinecraft {
         world.updateWorld(player.getX(), player.getZ());
         
         // 更新方块交互
-        updateBlockInteraction(currentFrameTime);
+        if (inputHandler != null) {
+            inputHandler.updateBlockInteraction(currentFrameTime);
+        }
+        
+        // 检查是否需要重新构建网格
+        if (meshRebuildNeeded) {
+            if (renderManager != null) {
+                renderManager.rebuildMesh(world);
+            }
+            meshRebuildNeeded = false;
+        }
         
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         render();
         
-        glfwSwapBuffers(window);
+        glfwSwapBuffers(windowManager.getWindow());
     }
-    
-    private void processInput(float deltaTime) {
-        // 直接查询键盘状态，避免回调冲突
-        boolean forward = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
-        boolean backward = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
-        boolean left = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
-        boolean right = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
-        boolean jump = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-        boolean shift = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS; // 改为shift键
-        
-        // 获取摄像头方向并传递给玩家
-        float[] moveDir = camera.getMovementDirection(forward, backward, left, right);
-        
-        // 使用基于摄像头方向的移动（shift用于飞行下降或地面冲刺）
-        player.handleInput(moveDir, jump, shift, deltaTime);
-    }
-    
-    /**
-     * 处理鼠标点击
-     */
-    private void handleMouseClick() {
-        if (!mouseCaptured || interactionManager == null) return;
-        
-        // 使用精确的屏幕中心射线方向
-        float[] cameraDirection = camera.getCenterRayDirection();
-        
-        // 执行射线投射（从摄像头位置稍微向前偏移一点，确保射线从摄像头中心发出）
-        float rayStartX = camera.getX() + cameraDirection[0] * 0.1f;
-        float rayStartY = camera.getY() + cameraDirection[1] * 0.1f;
-        float rayStartZ = camera.getZ() + cameraDirection[2] * 0.1f;
-        
-        BlockInteractionManager.RaycastResult result = interactionManager.raycast(
-            rayStartX, rayStartY, rayStartZ,
-            cameraDirection[0], cameraDirection[1], cameraDirection[2]
-        );
-        
-        if (result.hit) {
-            interactionManager.setTargetBlock(result.block, result.face);
-            interactionManager.startBreaking((float) glfwGetTime());
-        }
-    }
-    
-    /**
-     * 处理右键点击（放置木板）
-     */
-    private void handleRightClick() {
-        if (!mouseCaptured || interactionManager == null) return;
-        
-        // 使用精确的屏幕中心射线方向
-        float[] cameraDirection = camera.getCenterRayDirection();
-        
-        // 射线起点稍微向前偏移一点，确保射线从摄像头中心发出
-        float rayStartX = camera.getX() + cameraDirection[0] * 0.1f;
-        float rayStartY = camera.getY() + cameraDirection[1] * 0.1f;
-        float rayStartZ = camera.getZ() + cameraDirection[2] * 0.1f;
-        
-        // 尝试放置木板方块
-        boolean success = interactionManager.placeBlock(
-            rayStartX, rayStartY, rayStartZ,
-            cameraDirection[0], cameraDirection[1], cameraDirection[2],
-            Block.BlockType.WOOD_PLANK
-        );
-        
-        if (success) {
-            // 如果放置成功，重新构建渲染缓冲区
-            if (interactionManager.needsMeshRebuild()) {
-                simpleRenderer.buildMeshFromWorld(world);
-                interactionManager.markMeshRebuilt();
-            }
-            System.out.println("木板放置成功!");
-        } else {
-            System.out.println("无法在此位置放置木板");
-        }
-    }
-    
-    /**
-     * 更新方块交互
-     */
-    private void updateBlockInteraction(float currentTime) {
-        if (interactionManager == null) return;
-        
-        // 使用精确的屏幕中心射线方向
-        float[] cameraDirection = camera.getCenterRayDirection();
-        
-        // 射线起点稍微向前偏移一点，确保射线从摄像头中心发出
-        float rayStartX = camera.getX() + cameraDirection[0] * 0.1f;
-        float rayStartY = camera.getY() + cameraDirection[1] * 0.1f;
-        float rayStartZ = camera.getZ() + cameraDirection[2] * 0.1f;
-        
-        BlockInteractionManager.RaycastResult result = interactionManager.raycast(
-            rayStartX, rayStartY, rayStartZ,
-            cameraDirection[0], cameraDirection[1], cameraDirection[2]
-        );
-        
-        // 如果鼠标没有按下，只是更新目标方块（用于显示十字标记）
-        if (!leftMousePressed) {
-            if (result.hit) {
-                interactionManager.setTargetBlock(result.block, result.face);
-            } else {
-                interactionManager.setTargetBlock(null, -1);
-            }
-        } else {
-            // 如果鼠标按下，检查是否还在同一个方块上
-            if (result.hit && result.block == interactionManager.getTargetBlock()) {
-                // 继续破坏
-                interactionManager.updateBreaking(currentTime);
-                
-                // 检查是否需要重新构建渲染缓冲区（方块被破坏后）
-                if (interactionManager.needsMeshRebuild()) {
-                    // 确保可见面已更新后再重建网格
-                    world.updateWorld(player.getX(), player.getZ());
-                    simpleRenderer.buildMeshFromWorld(world);
-                    interactionManager.markMeshRebuilt();
-                }
-            } else {
-                // 目标改变，停止破坏
-                interactionManager.stopBreaking();
-                interactionManager.setTargetBlock(null, -1);
-            }
-        }
-    }
-    
-    private void captureMouse() {
-        mouseCaptured = true;
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        firstMouse = true; // 重置首次移动标志
-        System.out.println("Mouse captured. Press F1 to release.");
-    }
-    
-    private void releaseMouse() {
-        mouseCaptured = false;
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        System.out.println("Mouse released. Click to capture again.");
-    }
-    
-    private void toggleMouseCapture() {
-        if (mouseCaptured) {
-            releaseMouse();
-        } else {
-            captureMouse();
-        }
-    }
-    
-    /**
-     * 切换全屏模式
-     */
-    private void toggleFullscreen() {
-        if (isFullscreen) {
-            switchToWindowedMode();
-        } else {
-            switchToFullscreenMode();
-        }
-        
-        // 更新视口
-        glViewport(0, 0, currentWidth, currentHeight);
-        
-        // 重置鼠标位置
-        lastX = currentWidth / 2.0f;
-        lastY = currentHeight / 2.0f;
-        firstMouse = true;
-    }
-    
-    private void switchToWindowedMode() {
-        // 切换到窗口模式
-        glfwSetWindowMonitor(window, NULL, windowedPosX, windowedPosY,
-                           windowedWidth, windowedHeight, GLFW_DONT_CARE);
-        currentWidth = windowedWidth;
-        currentHeight = windowedHeight;
-        isFullscreen = false;
-        System.out.println("Switched to windowed mode: " + currentWidth + "x" + currentHeight);
-    }
-    
-    private void switchToFullscreenMode() {
-        // 保存当前窗口位置和大小
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer pWidth = stack.mallocInt(1);
-            IntBuffer pHeight = stack.mallocInt(1);
-            IntBuffer pXPos = stack.mallocInt(1);
-            IntBuffer pYPos = stack.mallocInt(1);
-            
-            glfwGetWindowSize(window, pWidth, pHeight);
-            glfwGetWindowPos(window, pXPos, pYPos);
-            
-            windowedWidth = pWidth.get(0);
-            windowedHeight = pHeight.get(0);
-            windowedPosX = pXPos.get(0);
-            windowedPosY = pYPos.get(0);
-        }
-        
-        // 切换到全屏模式
-        long monitor = glfwGetPrimaryMonitor();
-        GLFWVidMode vidMode = glfwGetVideoMode(monitor);
-        
-        glfwSetWindowMonitor(window, monitor, 0, 0,
-                           vidMode.width(), vidMode.height(), vidMode.refreshRate());
-        currentWidth = vidMode.width();
-        currentHeight = vidMode.height();
-        isFullscreen = true;
-        System.out.println("Switched to fullscreen mode: " + currentWidth + "x" + currentHeight);
-    }
-    
-    private void initRender() {
-        initTexture();
-        initShaders();
-        initRenderer();
-        initUIRenderer();
-    }
-    
-    private void initTexture() {
-        // 加载纹理
-        textureId = TextureLoader.loadTexture("texture/my-mc-texture.png");
-        System.out.println("Texture loaded with ID: " + textureId);
-    }
-    
-    private void initShaders() {
-        // 初始化着色器管理器
-        shaderManager = new ShaderManager();
-        shaderProgram = shaderManager.createBlockShaderProgram();
-        System.out.println("Shader program created with ID: " + shaderProgram);
-    }
-    
-    private void initRenderer() {
-        // 初始化简化渲染器并构建几何数据
-        simpleRenderer = new SimpleRenderer();
-        simpleRenderer.buildMeshFromWorld(world);
-        System.out.println("Simple renderer initialized and mesh built");
-    }
-    
-    private void initUIRenderer() {
-        // 初始化UI渲染器
-        uiRenderer = new UIRenderer();
-        System.out.println("UI renderer initialized");
-    }
-    
     
     
     private void render() {
-        // 使用着色器程序
-        glUseProgram(shaderProgram);
-        
-        // 设置纹理uniform
-        int textureLocation = glGetUniformLocation(shaderProgram, "ourTexture");
-        glUniform1i(textureLocation, 0);
-        
-        // 设置光照参数
-        setupLighting();
-        
-        // 设置破坏效果参数
-        setupBreakingEffect();
-        
-        // 传递矩阵uniform
-        uploadMatrices();
-        
-        // 简化渲染 - 传递摄像头位置用于透明方块排序
-        simpleRenderer.render(textureId, camera.getX(), camera.getY(), camera.getZ());
-        
-        // 渲染UI元素（十字标记）
-        uiRenderer.renderCrosshair(currentWidth, currentHeight);
-    }
-    
-    private void uploadMatrices() {
-        // 创建变换矩阵
-        float[] modelMatrix = createModelMatrix();
-        float[] viewMatrix = camera.getViewMatrix();
-        float[] projectionMatrix = Camera.perspective(45.0f, (float)currentWidth / (float)currentHeight, 0.1f, 1000.0f);
-        
-        // 传递矩阵uniform
-        shaderManager.uploadMatrix4f(shaderProgram, "model", modelMatrix);
-        shaderManager.uploadMatrix4f(shaderProgram, "view", viewMatrix);
-        shaderManager.uploadMatrix4f(shaderProgram, "projection", projectionMatrix);
-    }
-    
-    
-    private float[] createModelMatrix() {
-        // 创建单位矩阵
-        float[] model = new float[16];
-        model[0] = 1.0f; model[5] = 1.0f; model[10] = 1.0f; model[15] = 1.0f;
-        return model;
-    }
-    
-    /**
-     * 设置光照参数
-     */
-    private void setupLighting() {
-        // 固定的全局光照方向（从右上前方照射，角度更温和）
-        int lightDirLocation = glGetUniformLocation(shaderProgram, "lightDirection");
-        glUniform3f(lightDirLocation, 0.6f, -0.8f, 0.4f);
-        
-        // 光照颜色（温暖的白色，稍微降低强度）
-        int lightColorLocation = glGetUniformLocation(shaderProgram, "lightColor");
-        glUniform3f(lightColorLocation, 0.9f, 0.85f, 0.7f);
-        
-        // 环境光颜色（更温暖的蓝白色，增加整体亮度）
-        int ambientColorLocation = glGetUniformLocation(shaderProgram, "ambientColor");
-        glUniform3f(ambientColorLocation, 0.6f, 0.7f, 0.9f);
-        
-        // 环境光强度（提高基础亮度）
-        int ambientStrengthLocation = glGetUniformLocation(shaderProgram, "ambientStrength");
-        glUniform1f(ambientStrengthLocation, 0.5f);
-    }
-    /**
-     * 设置破坏效果参数
-     */
-    private void setupBreakingEffect() {
-        if (interactionManager == null) return;
-        
-        // 破坏进度
-        int breakProgressLocation = glGetUniformLocation(shaderProgram, "breakProgress");
-        glUniform1f(breakProgressLocation, interactionManager.getBreakProgress());
-        
-        // 目标方块位置
-        int targetBlockPosLocation = glGetUniformLocation(shaderProgram, "targetBlockPos");
-        if (interactionManager.getTargetBlock() != null) {
-            glUniform3f(targetBlockPosLocation, 
-                       interactionManager.getTargetBlock().getX(),
-                       interactionManager.getTargetBlock().getY(),
-                       interactionManager.getTargetBlock().getZ());
-        } else {
-            glUniform3f(targetBlockPosLocation, -999, -999, -999); // 无效位置
-        }
-        
-        // 目标面
-        int targetFaceLocation = glGetUniformLocation(shaderProgram, "targetFace");
-        glUniform1i(targetFaceLocation, interactionManager.getTargetFace());
+        // 使用渲染管理器进行渲染
+        renderManager.render(camera, windowManager.getCurrentWidth(), windowManager.getCurrentHeight());
     }
     
     private void cleanup() {
-        cleanupRenderer();
-        cleanupUIRenderer();
-        cleanupShaderManager();
-        cleanupTextures();
+        if (renderManager != null) {
+            renderManager.cleanup();
+        }
     }
     
-    private void cleanupRenderer() {
-        // 清理简化渲染器
-        if (simpleRenderer != null) simpleRenderer.cleanup();
+    /**
+     * 通知需要重新构建网格
+     */
+    public void onMeshRebuildNeeded() {
+        meshRebuildNeeded = true;
     }
     
-    private void cleanupUIRenderer() {
-        // 清理UI渲染器
-        if (uiRenderer != null) uiRenderer.cleanup();
+    /**
+     * 获取世界对象
+     */
+    public World getWorld() {
+        return world;
     }
     
-    private void cleanupShaderManager() {
-        // 清理着色器管理器
-        if (shaderManager != null) shaderManager.cleanup();
-    }
-    
-    private void cleanupTextures() {
-        // 删除渲染资源
-        if (textureId != 0) glDeleteTextures(textureId);
+    /**
+     * 重新构建网格
+     */
+    public void rebuildMesh() {
+        if (renderManager != null && world != null) {
+            renderManager.rebuildMesh(world);
+        }
     }
     
     public static void main(String[] args) {

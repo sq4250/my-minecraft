@@ -176,7 +176,7 @@ public class World {
      * 重新计算可见面（当方块被破坏后调用）
      */
     public void recalculateVisibleFaces() {
-        needsVisibleFaceUpdate = true;
+        calculateVisibleFaces();
     }
     
     /**
