@@ -9,7 +9,6 @@ import java.util.Map;
 public class Chunk {
     
     public static final int CHUNK_SIZE = 16; // 区块大小16x16
-    public static final int WORLD_HEIGHT = 256; // 世界高度
     
     private final int chunkX, chunkZ; // 区块坐标
     private final Map<String, Block> blocks; // 区块内的方块

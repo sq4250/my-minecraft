@@ -1,5 +1,4 @@
-package com.tsian;
-
+package com.tsian.render;
 import org.lwjgl.system.MemoryUtil;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
@@ -93,7 +92,7 @@ public class UIRenderer {
         // 固定像素大小的十字准心 - 不随窗口尺寸变化
         float crosshairLengthPixels = 25.0f; // 十字长度：15像素
         float crosshairWidthPixels = 2.0f;   // 十字宽度：2像素
-        
+         
         // 将像素转换为NDC坐标
         float crosshairLength = crosshairLengthPixels / (float) screenWidth * 2.0f; // 水平方向
         float crosshairHeight = crosshairLengthPixels / (float) screenHeight * 2.0f; // 垂直方向

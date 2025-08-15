@@ -99,7 +99,7 @@ public class Camera {
     }
     
     /**
-     * 处理鼠标输入 (暂时不实现，保留接口)
+     * 处理鼠标输入
      */
     public void processMouseMovement(float xoffset, float yoffset) {
         xoffset *= mouseSensitivity;

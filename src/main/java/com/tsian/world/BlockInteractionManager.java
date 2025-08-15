@@ -1,7 +1,4 @@
-package com.tsian;
-
-import com.tsian.world.World;
-import com.tsian.world.Block;
+package com.tsian.world;
 
 /**
  * 方块交互管理器 - 处理射线投射和方块交互

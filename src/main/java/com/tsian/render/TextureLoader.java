@@ -1,4 +1,4 @@
-package com.tsian;
+package com.tsian.render;
 
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;

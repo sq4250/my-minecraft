@@ -2,7 +2,11 @@ package com.tsian;
 
 import com.tsian.world.World;
 import com.tsian.world.Block;
+import com.tsian.world.BlockInteractionManager;
 import com.tsian.render.SimpleRenderer;
+import com.tsian.render.ShaderManager;
+import com.tsian.render.TextureLoader;
+import com.tsian.render.UIRenderer;
 
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
@@ -73,7 +77,6 @@ public class MyMinecraft {
     
     // 鼠标按键状态
     private boolean leftMousePressed = false;
-    private float mouseClickStartTime = 0.0f;
     
     
     public void run() {
@@ -95,6 +98,27 @@ public class MyMinecraft {
     }
     
     private void init() {
+        initGLFW();
+        createWindow();
+        setupCallbacks();
+        centerWindow();
+        showWindow();
+        
+        // 初始化摄像头、玩家和世界
+        camera = new Camera();
+        world = new World();
+        
+        // 创建玩家并设置初始位置（在空岛中心）
+        player = new Player(32.0f, 8.0f, 32.0f, world);
+        
+        // 初始化基于区块的世界
+        world.initializeWorld(player.getX(), player.getZ());
+        
+        interactionManager = new BlockInteractionManager(world);
+        lastFrameTime = (float) glfwGetTime();
+    }
+    
+    private void initGLFW() {
         // 设置错误回调，将GLFW错误消息打印到System.err
         GLFWErrorCallback.createPrint(System.err).set();
         
@@ -110,13 +134,17 @@ public class MyMinecraft {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        
+    }
+    
+    private void createWindow() {
         // 创建窗口
         window = glfwCreateWindow(currentWidth, currentHeight, WINDOW_TITLE, NULL, NULL);
         if (window == NULL) {
             throw new RuntimeException("Failed to create the GLFW window");
         }
-        
+    }
+    
+    private void setupCallbacks() {
         // 设置键盘回调
         glfwSetKeyCallback(window, (window, key, scancode, action, mods) -> {
             if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
@@ -170,7 +198,6 @@ public class MyMinecraft {
                     } else {
                         // 开始破坏方块
                         leftMousePressed = true;
-                        mouseClickStartTime = (float) glfwGetTime();
                         handleMouseClick();
                     }
                 } else if (action == GLFW_RELEASE) {
@@ -191,7 +218,9 @@ public class MyMinecraft {
                 }
             }
         });
-        
+    }
+    
+    private void centerWindow() {
         // 窗口居中
         try (MemoryStack stack = stackPush()) {
             IntBuffer pWidth = stack.mallocInt(1);
@@ -206,34 +235,36 @@ public class MyMinecraft {
                 (vidmode.height() - pHeight.get(0)) / 2
             );
         }
-        
+    }
+    
+    private void showWindow() {
         // 使当前线程的OpenGL上下文为当前上下文
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1); // 启用v-sync
         glfwShowWindow(window);
-        
-        // 初始化摄像头、玩家和世界
-        camera = new Camera();
-        world = new World();
-        
-        // 创建玩家并设置初始位置（在空岛中心）
-        player = new Player(32.0f, 8.0f, 32.0f, world);
-        
-        // 初始化基于区块的世界
-        world.initializeWorld(player.getX(), player.getZ());
-        
-        interactionManager = new BlockInteractionManager(world);
-        lastFrameTime = (float) glfwGetTime();
     }
     
     private void loop() {
+        setupOpenGLContext();
+        initializeRenderResources();
+        setupOpenGLState();
+        
+        // 主渲染循环
+        while (!glfwWindowShouldClose(window)) {
+            processFrame();
+        }
+    }
+    
+    private void setupOpenGLContext() {
         // 创建OpenGL上下文能力
         GL.createCapabilities();
         
         // 打印OpenGL版本信息
         System.out.println("OpenGL Version: " + glGetString(GL_VERSION));
         System.out.println("OpenGL Renderer: " + glGetString(GL_RENDERER));
-        
+    }
+    
+    private void initializeRenderResources() {
         // 初始化渲染资源
         try {
             initRender();
@@ -243,7 +274,9 @@ public class MyMinecraft {
             e.printStackTrace();
             return;
         }
-        
+    }
+    
+    private void setupOpenGLState() {
         // 设置清除颜色为天蓝色
         glClearColor(0.53f, 0.81f, 0.98f, 1.0f);
         
@@ -258,39 +291,38 @@ public class MyMinecraft {
         // 启用混合以支持透明度
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    
+    private void processFrame() {
+        // 先处理事件，确保输入及时响应
+        glfwPollEvents();
         
-        // 主渲染循环
-        while (!glfwWindowShouldClose(window)) {
-            // 先处理事件，确保输入及时响应
-            glfwPollEvents();
-            
-            // 计算帧时间
-            float currentFrameTime = (float) glfwGetTime();
-            float deltaTime = currentFrameTime - lastFrameTime;
-            lastFrameTime = currentFrameTime;
-            
-            // 处理输入和更新玩家
-            processInput(deltaTime);
-            
-            // 更新玩家物理和位置
-            player.update(deltaTime);
-            
-            // 更新摄像头位置（跟随玩家）
-            float[] cameraPos = player.getCameraPosition();
-            camera.setPosition(cameraPos[0], cameraPos[1], cameraPos[2]);
-            
-            // 更新世界状态（区块加载/卸载）
-            world.updateWorld(player.getX(), player.getZ());
-            
-            // 更新方块交互
-            updateBlockInteraction(currentFrameTime);
-            
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            
-            render();
-            
-            glfwSwapBuffers(window);
-        }
+        // 计算帧时间
+        float currentFrameTime = (float) glfwGetTime();
+        float deltaTime = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+        
+        // 处理输入和更新玩家
+        processInput(deltaTime);
+        
+        // 更新玩家物理和位置
+        player.update(deltaTime);
+        
+        // 更新摄像头位置（跟随玩家）
+        float[] cameraPos = player.getCameraPosition();
+        camera.setPosition(cameraPos[0], cameraPos[1], cameraPos[2]);
+        
+        // 更新世界状态（区块加载/卸载）
+        world.updateWorld(player.getX(), player.getZ());
+        
+        // 更新方块交互
+        updateBlockInteraction(currentFrameTime);
+        
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        render();
+        
+        glfwSwapBuffers(window);
     }
     
     private void processInput(float deltaTime) {
@@ -440,40 +472,9 @@ public class MyMinecraft {
      */
     private void toggleFullscreen() {
         if (isFullscreen) {
-            // 切换到窗口模式
-            glfwSetWindowMonitor(window, NULL, windowedPosX, windowedPosY,
-                               windowedWidth, windowedHeight, GLFW_DONT_CARE);
-            currentWidth = windowedWidth;
-            currentHeight = windowedHeight;
-            isFullscreen = false;
-            System.out.println("Switched to windowed mode: " + currentWidth + "x" + currentHeight);
+            switchToWindowedMode();
         } else {
-            // 保存当前窗口位置和大小
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                IntBuffer pWidth = stack.mallocInt(1);
-                IntBuffer pHeight = stack.mallocInt(1);
-                IntBuffer pXPos = stack.mallocInt(1);
-                IntBuffer pYPos = stack.mallocInt(1);
-                
-                glfwGetWindowSize(window, pWidth, pHeight);
-                glfwGetWindowPos(window, pXPos, pYPos);
-                
-                windowedWidth = pWidth.get(0);
-                windowedHeight = pHeight.get(0);
-                windowedPosX = pXPos.get(0);
-                windowedPosY = pYPos.get(0);
-            }
-            
-            // 切换到全屏模式
-            long monitor = glfwGetPrimaryMonitor();
-            GLFWVidMode vidMode = glfwGetVideoMode(monitor);
-            
-            glfwSetWindowMonitor(window, monitor, 0, 0,
-                               vidMode.width(), vidMode.height(), vidMode.refreshRate());
-            currentWidth = vidMode.width();
-            currentHeight = vidMode.height();
-            isFullscreen = true;
-            System.out.println("Switched to fullscreen mode: " + currentWidth + "x" + currentHeight);
+            switchToFullscreenMode();
         }
         
         // 更新视口
@@ -485,24 +486,76 @@ public class MyMinecraft {
         firstMouse = true;
     }
     
+    private void switchToWindowedMode() {
+        // 切换到窗口模式
+        glfwSetWindowMonitor(window, NULL, windowedPosX, windowedPosY,
+                           windowedWidth, windowedHeight, GLFW_DONT_CARE);
+        currentWidth = windowedWidth;
+        currentHeight = windowedHeight;
+        isFullscreen = false;
+        System.out.println("Switched to windowed mode: " + currentWidth + "x" + currentHeight);
+    }
+    
+    private void switchToFullscreenMode() {
+        // 保存当前窗口位置和大小
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            IntBuffer pWidth = stack.mallocInt(1);
+            IntBuffer pHeight = stack.mallocInt(1);
+            IntBuffer pXPos = stack.mallocInt(1);
+            IntBuffer pYPos = stack.mallocInt(1);
+            
+            glfwGetWindowSize(window, pWidth, pHeight);
+            glfwGetWindowPos(window, pXPos, pYPos);
+            
+            windowedWidth = pWidth.get(0);
+            windowedHeight = pHeight.get(0);
+            windowedPosX = pXPos.get(0);
+            windowedPosY = pYPos.get(0);
+        }
+        
+        // 切换到全屏模式
+        long monitor = glfwGetPrimaryMonitor();
+        GLFWVidMode vidMode = glfwGetVideoMode(monitor);
+        
+        glfwSetWindowMonitor(window, monitor, 0, 0,
+                           vidMode.width(), vidMode.height(), vidMode.refreshRate());
+        currentWidth = vidMode.width();
+        currentHeight = vidMode.height();
+        isFullscreen = true;
+        System.out.println("Switched to fullscreen mode: " + currentWidth + "x" + currentHeight);
+    }
+    
     private void initRender() {
+        initTexture();
+        initShaders();
+        initRenderer();
+        initUIRenderer();
+    }
+    
+    private void initTexture() {
         // 加载纹理
         textureId = TextureLoader.loadTexture("texture/my-mc-texture.png");
         System.out.println("Texture loaded with ID: " + textureId);
-        
+    }
+    
+    private void initShaders() {
         // 初始化着色器管理器
         shaderManager = new ShaderManager();
         shaderProgram = shaderManager.createBlockShaderProgram();
         System.out.println("Shader program created with ID: " + shaderProgram);
+    }
+    
+    private void initRenderer() {
         // 初始化简化渲染器并构建几何数据
         simpleRenderer = new SimpleRenderer();
         simpleRenderer.buildMeshFromWorld(world);
         System.out.println("Simple renderer initialized and mesh built");
-        
+    }
+    
+    private void initUIRenderer() {
         // 初始化UI渲染器
         uiRenderer = new UIRenderer();
         System.out.println("UI renderer initialized");
-        
     }
     
     
@@ -521,6 +574,17 @@ public class MyMinecraft {
         // 设置破坏效果参数
         setupBreakingEffect();
         
+        // 传递矩阵uniform
+        uploadMatrices();
+        
+        // 简化渲染 - 传递摄像头位置用于透明方块排序
+        simpleRenderer.render(textureId, camera.getX(), camera.getY(), camera.getZ());
+        
+        // 渲染UI元素（十字标记）
+        uiRenderer.renderCrosshair(currentWidth, currentHeight);
+    }
+    
+    private void uploadMatrices() {
         // 创建变换矩阵
         float[] modelMatrix = createModelMatrix();
         float[] viewMatrix = camera.getViewMatrix();
@@ -530,12 +594,6 @@ public class MyMinecraft {
         shaderManager.uploadMatrix4f(shaderProgram, "model", modelMatrix);
         shaderManager.uploadMatrix4f(shaderProgram, "view", viewMatrix);
         shaderManager.uploadMatrix4f(shaderProgram, "projection", projectionMatrix);
-        
-        // 简化渲染 - 传递摄像头位置用于透明方块排序
-        simpleRenderer.render(textureId, camera.getX(), camera.getY(), camera.getZ());
-        
-        // 渲染UI元素（十字标记）
-        uiRenderer.renderCrosshair(currentWidth, currentHeight);
     }
     
     
@@ -593,15 +651,28 @@ public class MyMinecraft {
     }
     
     private void cleanup() {
+        cleanupRenderer();
+        cleanupUIRenderer();
+        cleanupShaderManager();
+        cleanupTextures();
+    }
+    
+    private void cleanupRenderer() {
         // 清理简化渲染器
         if (simpleRenderer != null) simpleRenderer.cleanup();
-        
+    }
+    
+    private void cleanupUIRenderer() {
         // 清理UI渲染器
         if (uiRenderer != null) uiRenderer.cleanup();
-        
+    }
+    
+    private void cleanupShaderManager() {
         // 清理着色器管理器
         if (shaderManager != null) shaderManager.cleanup();
-        
+    }
+    
+    private void cleanupTextures() {
         // 删除渲染资源
         if (textureId != 0) glDeleteTextures(textureId);
     }

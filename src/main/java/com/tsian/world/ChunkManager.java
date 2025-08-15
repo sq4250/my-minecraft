@@ -69,9 +69,9 @@ public class ChunkManager {
         int chunkX = chunk.getChunkX();
         int chunkZ = chunk.getChunkZ();
         
-        // 计算距离空岛中心的距离
-        float centerX = (ISLAND_MAX_CHUNK + ISLAND_MIN_CHUNK) * 0.5f;
-        float centerZ = (ISLAND_MAX_CHUNK + ISLAND_MIN_CHUNK) * 0.5f;
+        // 计算空岛中心坐标
+        float centerX = (ISLAND_MAX_CHUNK + ISLAND_MIN_CHUNK) * 0.5f * Chunk.CHUNK_SIZE + Chunk.CHUNK_SIZE / 2.0f;
+        float centerZ = (ISLAND_MAX_CHUNK + ISLAND_MIN_CHUNK) * 0.5f * Chunk.CHUNK_SIZE + Chunk.CHUNK_SIZE / 2.0f;
         
         for (int x = 0; x < Chunk.CHUNK_SIZE; x++) {
             for (int z = 0; z < Chunk.CHUNK_SIZE; z++) {
@@ -80,7 +80,7 @@ public class ChunkManager {
                 
                 // 计算到空岛中心的距离
                 float distanceToCenter = (float) Math.sqrt(
-                    Math.pow(worldX - 32, 2) + Math.pow(worldZ - 32, 2)
+                    Math.pow(worldX - centerX, 2) + Math.pow(worldZ - centerZ, 2)
                 );
                 
                 // 空岛半径约28格，边缘有渐变
