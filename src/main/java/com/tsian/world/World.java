@@ -164,6 +164,14 @@ public class World {
     }
     
     /**
+     * 重新计算可见面（当方块被破坏后调用）
+     */
+    public void recalculateVisibleFaces() {
+        calculateVisibleFaces();
+        System.out.println("Recalculated visible faces: " + cachedVisibleFaces.size() + " faces");
+    }
+    
+    /**
      * 可见面数据结构
      */
     public static class VisibleFace {

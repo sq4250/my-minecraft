@@ -14,6 +14,11 @@ uniform vec3 lightColor;      // 光照颜色
 uniform vec3 ambientColor;    // 环境光颜色
 uniform float ambientStrength; // 环境光强度
 
+// 破坏效果参数
+uniform float breakProgress;  // 破坏进度 (0.0 - 1.0)
+uniform vec3 targetBlockPos;  // 目标方块位置
+uniform int targetFace;       // 目标面
+
 void main() {
     // 获取纹理颜色
     vec4 texColor = texture(ourTexture, TexCoord);
@@ -27,6 +32,33 @@ void main() {
     if (int(BlockType) == 7) {
         blockColorTint = vec3(0.3, 0.6, 1.0); // 蓝色调
         texColor.rgb = mix(texColor.rgb, texColor.rgb * blockColorTint, 0.7); // 混合70%的蓝色调
+    }
+    
+    // 破坏纹理叠加
+    if (breakProgress > 0.0 &&
+        abs(FragPos.x - targetBlockPos.x) < 0.6 &&
+        abs(FragPos.y - targetBlockPos.y) < 0.6 &&
+        abs(FragPos.z - targetBlockPos.z) < 0.6) {
+        
+        // 根据破坏进度选择破坏纹理（10-12号纹理）
+        // 破坏纹理16x16像素，与方块纹理大小一致，直接覆盖方块表面
+        vec2 breakTexCoord;
+        if (breakProgress < 0.33) {
+            // 使用10号纹理 (第1阶段裂纹)
+            breakTexCoord = vec2(32.0/64.0, 32.0/48.0) + TexCoord * vec2(16.0/64.0, 16.0/48.0);
+        } else if (breakProgress < 0.66) {
+            // 使用11号纹理 (第2阶段裂纹)
+            breakTexCoord = vec2(48.0/64.0, 32.0/48.0) + TexCoord * vec2(16.0/64.0, 16.0/48.0);
+        } else {
+            // 使用12号纹理 (第3阶段裂纹)
+            breakTexCoord = vec2(16.0/64.0, 32.0/48.0) + TexCoord * vec2(16.0/64.0, 16.0/48.0);
+        }
+        
+        vec4 breakTexColor = texture(ourTexture, breakTexCoord);
+        // 混合破坏纹理
+        if (breakTexColor.a > 0.1) {
+            texColor.rgb = mix(texColor.rgb, breakTexColor.rgb, breakTexColor.a * 0.8);
+        }
     }
     
     // 归一化法向量

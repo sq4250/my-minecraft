@@ -57,11 +57,21 @@ public class MyMinecraft {
     // 着色器管理器
     private ShaderManager shaderManager;
     
+    // 方块交互管理器
+    private BlockInteractionManager interactionManager;
+    
+    // UI渲染器
+    private UIRenderer uiRenderer;
+    
     // 鼠标状态
     private boolean firstMouse = true;
     private boolean mouseCaptured = false;
     private float lastX = DEFAULT_WINDOW_WIDTH / 2.0f;
     private float lastY = DEFAULT_WINDOW_HEIGHT / 2.0f;
+    
+    // 鼠标按键状态
+    private boolean leftMousePressed = false;
+    private float mouseClickStartTime = 0.0f;
     
     
     public void run() {
@@ -151,9 +161,22 @@ public class MyMinecraft {
         
         // 鼠标点击回调，点击时捕获鼠标
         glfwSetMouseButtonCallback(window, (window, button, action, mods) -> {
-            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-                if (!mouseCaptured) {
-                    captureMouse();
+            if (button == GLFW_MOUSE_BUTTON_LEFT) {
+                if (action == GLFW_PRESS) {
+                    if (!mouseCaptured) {
+                        captureMouse();
+                    } else {
+                        // 开始破坏方块
+                        leftMousePressed = true;
+                        mouseClickStartTime = (float) glfwGetTime();
+                        handleMouseClick();
+                    }
+                } else if (action == GLFW_RELEASE) {
+                    // 停止破坏方块
+                    leftMousePressed = false;
+                    if (interactionManager != null) {
+                        interactionManager.stopBreaking();
+                    }
                 }
             }
         });
@@ -181,6 +204,7 @@ public class MyMinecraft {
         // 初始化摄像头和世界
         camera = new Camera(0.0f, 2.0f, 5.0f); // 调整摄像头位置
         world = new World();
+        interactionManager = new BlockInteractionManager(world);
         lastFrameTime = (float) glfwGetTime();
     }
     
@@ -230,7 +254,8 @@ public class MyMinecraft {
             // 处理输入
             processInput(deltaTime);
             
-            // 简单世界不需要更新
+            // 更新方块交互
+            updateBlockInteraction(currentFrameTime);
             
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             
@@ -250,6 +275,66 @@ public class MyMinecraft {
         boolean down = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
         
         camera.processKeyboardInput(forward, backward, left, right, up, down, deltaTime);
+    }
+    
+    /**
+     * 处理鼠标点击
+     */
+    private void handleMouseClick() {
+        if (!mouseCaptured || interactionManager == null) return;
+        
+        // 计算摄像头方向向量
+        float[] cameraDirection = camera.getFrontVector();
+        
+        // 执行射线投射
+        BlockInteractionManager.RaycastResult result = interactionManager.raycast(
+            camera.getX(), camera.getY(), camera.getZ(),
+            cameraDirection[0], cameraDirection[1], cameraDirection[2]
+        );
+        
+        if (result.hit) {
+            interactionManager.setTargetBlock(result.block, result.face);
+            interactionManager.startBreaking((float) glfwGetTime());
+        }
+    }
+    
+    /**
+     * 更新方块交互
+     */
+    private void updateBlockInteraction(float currentTime) {
+        if (interactionManager == null) return;
+        
+        // 执行射线投射检查目标方块
+        float[] cameraDirection = camera.getFrontVector();
+        BlockInteractionManager.RaycastResult result = interactionManager.raycast(
+            camera.getX(), camera.getY(), camera.getZ(),
+            cameraDirection[0], cameraDirection[1], cameraDirection[2]
+        );
+        
+        // 如果鼠标没有按下，只是更新目标方块（用于显示十字标记）
+        if (!leftMousePressed) {
+            if (result.hit) {
+                interactionManager.setTargetBlock(result.block, result.face);
+            } else {
+                interactionManager.setTargetBlock(null, -1);
+            }
+        } else {
+            // 如果鼠标按下，检查是否还在同一个方块上
+            if (result.hit && result.block == interactionManager.getTargetBlock()) {
+                // 继续破坏
+                interactionManager.updateBreaking(currentTime);
+                
+                // 检查是否需要重新构建渲染缓冲区（方块被破坏后）
+                if (interactionManager.needsMeshRebuild()) {
+                    simpleRenderer.buildMeshFromWorld(world);
+                    interactionManager.markMeshRebuilt();
+                }
+            } else {
+                // 目标改变，停止破坏
+                interactionManager.stopBreaking();
+                interactionManager.setTargetBlock(null, -1);
+            }
+        }
     }
     
     private void captureMouse() {
@@ -337,6 +422,10 @@ public class MyMinecraft {
         simpleRenderer.buildMeshFromWorld(world);
         System.out.println("Simple renderer initialized and mesh built");
         
+        // 初始化UI渲染器
+        uiRenderer = new UIRenderer();
+        System.out.println("UI renderer initialized");
+        
     }
     
     
@@ -352,6 +441,9 @@ public class MyMinecraft {
         // 设置光照参数
         setupLighting();
         
+        // 设置破坏效果参数
+        setupBreakingEffect();
+        
         // 创建变换矩阵
         float[] modelMatrix = createModelMatrix();
         float[] viewMatrix = camera.getViewMatrix();
@@ -363,6 +455,9 @@ public class MyMinecraft {
         shaderManager.uploadMatrix4f(shaderProgram, "projection", projectionMatrix);
         
         // 简化渲染 - 传递摄像头位置用于透明方块排序
+        
+        // 渲染UI元素（十字标记）- 暂时禁用
+        // uiRenderer.renderCrosshair(currentWidth, currentHeight);
         simpleRenderer.render(textureId, camera.getX(), camera.getY(), camera.getZ());
     }
     
@@ -394,10 +489,38 @@ public class MyMinecraft {
         int ambientStrengthLocation = glGetUniformLocation(shaderProgram, "ambientStrength");
         glUniform1f(ambientStrengthLocation, 0.5f);
     }
+    /**
+     * 设置破坏效果参数
+     */
+    private void setupBreakingEffect() {
+        if (interactionManager == null) return;
+        
+        // 破坏进度
+        int breakProgressLocation = glGetUniformLocation(shaderProgram, "breakProgress");
+        glUniform1f(breakProgressLocation, interactionManager.getBreakProgress());
+        
+        // 目标方块位置
+        int targetBlockPosLocation = glGetUniformLocation(shaderProgram, "targetBlockPos");
+        if (interactionManager.getTargetBlock() != null) {
+            glUniform3f(targetBlockPosLocation, 
+                       interactionManager.getTargetBlock().getX(),
+                       interactionManager.getTargetBlock().getY(),
+                       interactionManager.getTargetBlock().getZ());
+        } else {
+            glUniform3f(targetBlockPosLocation, -999, -999, -999); // 无效位置
+        }
+        
+        // 目标面
+        int targetFaceLocation = glGetUniformLocation(shaderProgram, "targetFace");
+        glUniform1i(targetFaceLocation, interactionManager.getTargetFace());
+    }
     
     private void cleanup() {
         // 清理简化渲染器
         if (simpleRenderer != null) simpleRenderer.cleanup();
+        
+        // 清理UI渲染器
+        if (uiRenderer != null) uiRenderer.cleanup();
         
         // 清理着色器管理器
         if (shaderManager != null) shaderManager.cleanup();

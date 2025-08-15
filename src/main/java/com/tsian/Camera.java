@@ -220,4 +220,11 @@ public class Camera {
     public float getX() { return x; }
     public float getY() { return y; }
     public float getZ() { return z; }
+    
+    /**
+     * 获取摄像头前向量
+     */
+    public float[] getFrontVector() {
+        return new float[]{front[0], front[1], front[2]};
+    }
 }
