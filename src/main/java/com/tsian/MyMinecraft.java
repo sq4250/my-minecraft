@@ -606,16 +606,26 @@ public class MyMinecraft {
     }
     
     /**
-     * 优化渲染 - 整合视锥剔除、LOD和批量渲染
+     * 优化渲染 - 整合LOD和批量渲染
      */
     private void renderOptimized() {
         // 清空批次
         renderBatch.clear();
         
         // 统计变量
-        int totalBlocks = 0;
-        int lodCulled = 0;
-        int rendered = 0;
+        int totalFaces = 0;
+        int lodCulledFaces = 0;
+        int renderedFaces = 0;
+        
+        // 先按方块进行LOD剔除，避免重复计算
+        var allBlocks = world.getBlocks();
+        var lodLevels = new java.util.HashMap<Block, LODSystem.LODLevel>();
+        
+        // 预计算所有方块的LOD级别
+        for (Block block : allBlocks) {
+            LODSystem.LODLevel lodLevel = lodSystem.getLODLevel(block);
+            lodLevels.put(block, lodLevel);
+        }
         
         // 获取所有可见面
         var visibleFaces = world.getVisibleFaces();
@@ -623,17 +633,18 @@ public class MyMinecraft {
         for (World.VisibleFace visibleFace : visibleFaces) {
             Block block = visibleFace.block;
             int face = visibleFace.face;
-            totalBlocks++;
+            totalFaces++;
             
-            // 1. LOD剔除
-            LODSystem.LODLevel lodLevel = lodSystem.getLODLevel(block);
+            // 1. LOD剔除检查
+            LODSystem.LODLevel lodLevel = lodLevels.get(block);
             if (lodLevel == LODSystem.LODLevel.CULLED) {
-                lodCulled++;
+                lodCulledFaces++;
                 continue;
             }
             
-            // 2. LOD面剔除
+            // 2. LOD面剔除检查
             if (!lodSystem.shouldRenderFace(block, face, lodLevel)) {
+                lodCulledFaces++;
                 continue;
             }
             
@@ -643,7 +654,7 @@ public class MyMinecraft {
             
             // 4. 添加到批次
             renderBatch.addFace(block, face, faceVertices, faceIndices);
-            rendered++;
+            renderedFaces++;
         }
         
         // 批量渲染
@@ -651,11 +662,11 @@ public class MyMinecraft {
         
         // 输出统计信息（每60帧输出一次）
         if (frameCount % 60 == 0) {
-            System.out.printf("Render Stats - Total: %d, LOD Culled: %d, Rendered: %d%n",
-                            totalBlocks, lodCulled, rendered);
+            System.out.printf("Render Stats - Total Faces: %d, LOD Culled: %d, Rendered: %d%n",
+                            totalFaces, lodCulledFaces, renderedFaces);
             
-            // LOD统计
-            LODSystem.LODStats lodStats = lodSystem.calculateStats(world.getBlocks());
+            // LOD统计（按方块计算）
+            LODSystem.LODStats lodStats = lodSystem.calculateStats(allBlocks);
             System.out.println("  " + lodStats);
             
             // 批次统计
