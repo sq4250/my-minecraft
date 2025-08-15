@@ -1,23 +1,21 @@
 package com.tsian;
 
+import com.tsian.world.World;
+import com.tsian.render.SimpleRenderer;
+
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.system.MemoryStack;
 
-import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.opengl.GL30.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.NULL;
-import static org.lwjgl.BufferUtils.createFloatBuffer;
-import static org.lwjgl.BufferUtils.createIntBuffer;
 
 /**
  * 简易版Minecraft - 使用LWJGL和现代OpenGL可编程管线开发
@@ -44,9 +42,6 @@ public class MyMinecraft {
     
     // 渲染相关变量
     private int textureId;
-    private int vaoId;
-    private int vboId;
-    private int eboId;
     private int shaderProgram;
     
     // 世界和渲染
@@ -56,9 +51,11 @@ public class MyMinecraft {
     private Camera camera;
     private float lastFrameTime;
     
-    // 渲染优化系统
-    private RenderBatch renderBatch;
-    private LODSystem lodSystem;
+    // 简化渲染器
+    private SimpleRenderer simpleRenderer;
+    
+    // 着色器管理器
+    private ShaderManager shaderManager;
     
     // 鼠标状态
     private boolean firstMouse = true;
@@ -66,14 +63,6 @@ public class MyMinecraft {
     private float lastX = DEFAULT_WINDOW_WIDTH / 2.0f;
     private float lastY = DEFAULT_WINDOW_HEIGHT / 2.0f;
     
-    // 动态生成的顶点和索引数据
-    private float[] vertices;
-    private int[] indices;
-    private int vertexCount;
-    
-    // 几何更新相关
-    private int lastGeometryUpdate = 0;
-    private int frameCount = 0;
     
     public void run() {
         System.out.println("Starting My Minecraft with Modern OpenGL...");
@@ -336,243 +325,23 @@ public class MyMinecraft {
     
     private void initRender() {
         // 加载纹理
-        textureId = TextureLoader.loadTexture("my-mc-texture.png");
+        textureId = TextureLoader.loadTexture("texture/my-mc-texture.png");
         System.out.println("Texture loaded with ID: " + textureId);
         
-        // 创建着色器程序
-        shaderProgram = createShaderProgram();
+        // 初始化着色器管理器
+        shaderManager = new ShaderManager();
+        shaderProgram = shaderManager.createBlockShaderProgram();
         System.out.println("Shader program created with ID: " + shaderProgram);
+        // 初始化简化渲染器并构建几何数据
+        simpleRenderer = new SimpleRenderer();
+        simpleRenderer.buildMeshFromWorld(world);
+        System.out.println("Simple renderer initialized and mesh built");
         
-        // 初始化优化系统
-        renderBatch = new RenderBatch();
-        lodSystem = new LODSystem();
-        System.out.println("Render optimization systems initialized");
-        
-        // 创建VAO和缓冲区（保持兼容性）
-        vaoId = glGenVertexArrays();
-        vboId = glGenBuffers();
-        eboId = glGenBuffers();
     }
     
-    /**
-     * 设置OpenGL缓冲区
-     */
-    private void setupBuffers() {
-        glBindVertexArray(vaoId);
-        
-        // 更新VBO
-        glBindBuffer(GL_ARRAY_BUFFER, vboId);
-        FloatBuffer vertexBuffer = createFloatBuffer(vertices.length);
-        vertexBuffer.put(vertices).flip();
-        glBufferData(GL_ARRAY_BUFFER, vertexBuffer, GL_DYNAMIC_DRAW); // 使用DYNAMIC_DRAW因为数据会变化
-        
-        // 更新EBO
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboId);
-        IntBuffer indexBuffer = createIntBuffer(indices.length);
-        indexBuffer.put(indices).flip();
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBuffer, GL_DYNAMIC_DRAW);
-        
-        // 设置顶点属性
-        // 位置属性 (location = 0) - 3D坐标
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 5 * Float.BYTES, 0);
-        glEnableVertexAttribArray(0);
-        
-        // 纹理坐标属性 (location = 1)
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, 5 * Float.BYTES, 3 * Float.BYTES);
-        glEnableVertexAttribArray(1);
-        
-        // 解绑VAO
-        glBindVertexArray(0);
-    }
     
-    /**
-     * 生成世界几何数据 - 简单的3x3x3世界
-     */
-    private void generateWorldGeometry() {
-        var visibleFaces = world.getVisibleFaces();
-        
-        // 每个面4个顶点，每个顶点5个float（3个位置 + 2个纹理坐标）
-        vertices = new float[visibleFaces.size() * 4 * 5];
-        // 每个面2个三角形，每个三角形3个顶点
-        indices = new int[visibleFaces.size() * 6];
-        
-        int vertexIndex = 0;
-        int indexIndex = 0;
-        int currentVertex = 0;
-        
-        for (World.VisibleFace visibleFace : visibleFaces) {
-            Block block = visibleFace.block;
-            int face = visibleFace.face;
-            
-            // 获取方块世界位置
-            float blockX = block.getX();
-            float blockY = block.getY();
-            float blockZ = block.getZ();
-            
-            // 获取纹理坐标
-            float[] texCoords = block.getTextureCoords(face);
-            float u1 = texCoords[0], v1 = texCoords[1];
-            float u2 = texCoords[2], v2 = texCoords[3];
-            
-            // 根据面生成顶点
-            float[][] faceVertices = getFaceVertices(blockX, blockY, blockZ, face);
-            
-            // 添加4个顶点
-            for (int i = 0; i < 4; i++) {
-                vertices[vertexIndex++] = faceVertices[i][0]; // x
-                vertices[vertexIndex++] = faceVertices[i][1]; // y
-                vertices[vertexIndex++] = faceVertices[i][2]; // z
-                
-                // 纹理坐标
-                float u = (i == 1 || i == 2) ? u2 : u1;
-                float v = (i == 2 || i == 3) ? v1 : v2;
-                vertices[vertexIndex++] = u;
-                vertices[vertexIndex++] = v;
-            }
-            
-            // 添加2个三角形的索引
-            indices[indexIndex++] = currentVertex;
-            indices[indexIndex++] = currentVertex + 1;
-            indices[indexIndex++] = currentVertex + 2;
-            
-            indices[indexIndex++] = currentVertex + 2;
-            indices[indexIndex++] = currentVertex + 3;
-            indices[indexIndex++] = currentVertex;
-            
-            currentVertex += 4;
-        }
-        
-        vertexCount = indices.length;
-        System.out.println("Generated geometry: " + vertices.length/5 + " vertices, " + indices.length/3 + " triangles");
-    }
-    
-    /**
-     * 获取方块某个面的顶点坐标
-     */
-    private float[][] getFaceVertices(float x, float y, float z, int face) {
-        float[][] vertices = new float[4][3];
-        
-        switch (face) {
-            case 0: // 前面 (+Z)
-                vertices[0] = new float[]{x - 0.5f, y - 0.5f, z + 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y - 0.5f, z + 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y + 0.5f, z + 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y + 0.5f, z + 0.5f}; // 左上
-                break;
-            case 1: // 后面 (-Z)
-                vertices[0] = new float[]{x + 0.5f, y - 0.5f, z - 0.5f}; // 左下
-                vertices[1] = new float[]{x - 0.5f, y - 0.5f, z - 0.5f}; // 右下
-                vertices[2] = new float[]{x - 0.5f, y + 0.5f, z - 0.5f}; // 右上
-                vertices[3] = new float[]{x + 0.5f, y + 0.5f, z - 0.5f}; // 左上
-                break;
-            case 2: // 左面 (-X)
-                vertices[0] = new float[]{x - 0.5f, y - 0.5f, z - 0.5f}; // 左下
-                vertices[1] = new float[]{x - 0.5f, y - 0.5f, z + 0.5f}; // 右下
-                vertices[2] = new float[]{x - 0.5f, y + 0.5f, z + 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y + 0.5f, z - 0.5f}; // 左上
-                break;
-            case 3: // 右面 (+X)
-                vertices[0] = new float[]{x + 0.5f, y - 0.5f, z + 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y - 0.5f, z - 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y + 0.5f, z - 0.5f}; // 右上
-                vertices[3] = new float[]{x + 0.5f, y + 0.5f, z + 0.5f}; // 左上
-                break;
-            case 4: // 上面 (+Y)
-                vertices[0] = new float[]{x - 0.5f, y + 0.5f, z + 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y + 0.5f, z + 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y + 0.5f, z - 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y + 0.5f, z - 0.5f}; // 左上
-                break;
-            case 5: // 下面 (-Y)
-                vertices[0] = new float[]{x - 0.5f, y - 0.5f, z - 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y - 0.5f, z - 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y - 0.5f, z + 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y - 0.5f, z + 0.5f}; // 左上
-                break;
-        }
-        
-        return vertices;
-    }
-    
-    private int createShaderProgram() {
-        // 顶点着色器源码
-        String vertexShaderSource = """
-            #version 330 core
-            layout (location = 0) in vec3 aPos;
-            layout (location = 1) in vec2 aTexCoord;
-            
-            out vec2 TexCoord;
-            
-            uniform mat4 model;
-            uniform mat4 view;
-            uniform mat4 projection;
-            
-            void main() {
-                gl_Position = projection * view * model * vec4(aPos, 1.0);
-                TexCoord = aTexCoord;
-            }
-            """;
-        
-        // 片段着色器源码
-        String fragmentShaderSource = """
-            #version 330 core
-            out vec4 FragColor;
-            
-            in vec2 TexCoord;
-            uniform sampler2D ourTexture;
-            
-            void main() {
-                FragColor = texture(ourTexture, TexCoord);
-                if(FragColor.a < 0.1)
-                    discard;
-            }
-            """;
-        
-        // 编译顶点着色器
-        int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vertexShader, vertexShaderSource);
-        glCompileShader(vertexShader);
-        checkShaderCompilation(vertexShader, "VERTEX");
-        
-        // 编译片段着色器
-        int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragmentShader, fragmentShaderSource);
-        glCompileShader(fragmentShader);
-        checkShaderCompilation(fragmentShader, "FRAGMENT");
-        
-        // 创建着色器程序
-        int program = glCreateProgram();
-        glAttachShader(program, vertexShader);
-        glAttachShader(program, fragmentShader);
-        glLinkProgram(program);
-        checkProgramLinking(program);
-        
-        // 删除着色器对象
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
-        
-        return program;
-    }
-    
-    private void checkShaderCompilation(int shader, String type) {
-        int success = glGetShaderi(shader, GL_COMPILE_STATUS);
-        if (success == 0) {
-            String infoLog = glGetShaderInfoLog(shader);
-            throw new RuntimeException("Shader compilation failed (" + type + "): " + infoLog);
-        }
-    }
-    
-    private void checkProgramLinking(int program) {
-        int success = glGetProgrami(program, GL_LINK_STATUS);
-        if (success == 0) {
-            String infoLog = glGetProgramInfoLog(program);
-            throw new RuntimeException("Program linking failed: " + infoLog);
-        }
-    }
     
     private void render() {
-        frameCount++;
-        
         // 使用着色器程序
         glUseProgram(shaderProgram);
         
@@ -586,137 +355,14 @@ public class MyMinecraft {
         float[] projectionMatrix = Camera.perspective(45.0f, (float)currentWidth / (float)currentHeight, 0.1f, 1000.0f);
         
         // 传递矩阵uniform
-        uploadMatrix4f("model", modelMatrix);
-        uploadMatrix4f("view", viewMatrix);
-        uploadMatrix4f("projection", projectionMatrix);
+        shaderManager.uploadMatrix4f(shaderProgram, "model", modelMatrix);
+        shaderManager.uploadMatrix4f(shaderProgram, "view", viewMatrix);
+        shaderManager.uploadMatrix4f(shaderProgram, "projection", projectionMatrix);
         
-        // 更新优化系统
-        updateOptimizationSystems(viewMatrix, projectionMatrix);
-        
-        // 优化渲染
-        renderOptimized();
+        // 简化渲染 - 直接使用预构建的几何数据
+        simpleRenderer.render(textureId);
     }
     
-    /**
-     * 更新优化系统
-     */
-    private void updateOptimizationSystems(float[] viewMatrix, float[] projectionMatrix) {
-        // 更新LOD系统摄像机位置
-        lodSystem.updateCameraPosition(camera.getX(), camera.getY(), camera.getZ());
-    }
-    
-    /**
-     * 优化渲染 - 整合LOD和批量渲染
-     */
-    private void renderOptimized() {
-        // 清空批次
-        renderBatch.clear();
-        
-        // 统计变量
-        int totalFaces = 0;
-        int lodCulledFaces = 0;
-        int renderedFaces = 0;
-        
-        // 先按方块进行LOD剔除，避免重复计算
-        var allBlocks = world.getBlocks();
-        var lodLevels = new java.util.HashMap<Block, LODSystem.LODLevel>();
-        
-        // 预计算所有方块的LOD级别
-        for (Block block : allBlocks) {
-            LODSystem.LODLevel lodLevel = lodSystem.getLODLevel(block);
-            lodLevels.put(block, lodLevel);
-        }
-        
-        // 获取所有可见面
-        var visibleFaces = world.getVisibleFaces();
-        
-        for (World.VisibleFace visibleFace : visibleFaces) {
-            Block block = visibleFace.block;
-            int face = visibleFace.face;
-            totalFaces++;
-            
-            // 1. LOD剔除检查
-            LODSystem.LODLevel lodLevel = lodLevels.get(block);
-            if (lodLevel == LODSystem.LODLevel.CULLED) {
-                lodCulledFaces++;
-                continue;
-            }
-            
-            // 2. LOD面剔除检查
-            if (!lodSystem.shouldRenderFace(block, face, lodLevel)) {
-                lodCulledFaces++;
-                continue;
-            }
-            
-            // 3. 生成面的几何数据
-            float[] faceVertices = generateFaceVertices(block, face);
-            int[] faceIndices = generateFaceIndices();
-            
-            // 4. 添加到批次
-            renderBatch.addFace(block, face, faceVertices, faceIndices);
-            renderedFaces++;
-        }
-        
-        // 批量渲染
-        renderBatch.render(shaderProgram, textureId);
-        
-        // 输出统计信息（每60帧输出一次）
-        if (frameCount % 60 == 0) {
-            System.out.printf("Render Stats - Total Faces: %d, LOD Culled: %d, Rendered: %d%n",
-                            totalFaces, lodCulledFaces, renderedFaces);
-            
-            // LOD统计（按方块计算）
-            LODSystem.LODStats lodStats = lodSystem.calculateStats(allBlocks);
-            System.out.println("  " + lodStats);
-            
-            // 批次统计
-            RenderBatch.BatchStats batchStats = renderBatch.getStats();
-            System.out.println("  " + batchStats);
-        }
-    }
-    
-    /**
-     * 生成单个面的顶点数据
-     */
-    private float[] generateFaceVertices(Block block, int face) {
-        float blockX = block.getX();
-        float blockY = block.getY();
-        float blockZ = block.getZ();
-        
-        // 获取面的顶点坐标
-        float[][] vertices = getFaceVertices(blockX, blockY, blockZ, face);
-        
-        // 获取纹理坐标
-        float[] texCoords = block.getTextureCoords(face);
-        float u1 = texCoords[0], v1 = texCoords[1];
-        float u2 = texCoords[2], v2 = texCoords[3];
-        
-        // 组装顶点数据 (每个顶点5个float: x,y,z,u,v)
-        float[] faceVertices = new float[20]; // 4个顶点 * 5个float
-        int index = 0;
-        
-        for (int i = 0; i < 4; i++) {
-            faceVertices[index++] = vertices[i][0]; // x
-            faceVertices[index++] = vertices[i][1]; // y
-            faceVertices[index++] = vertices[i][2]; // z
-            
-            // 纹理坐标
-            float u = (i == 1 || i == 2) ? u2 : u1;
-            float v = (i == 2 || i == 3) ? v1 : v2;
-            faceVertices[index++] = u;
-            faceVertices[index++] = v;
-        }
-        
-        return faceVertices;
-    }
-    
-    /**
-     * 生成面的索引数据
-     */
-    private int[] generateFaceIndices() {
-        // 每个面2个三角形
-        return new int[]{0, 1, 2, 2, 3, 0};
-    }
     
     private float[] createModelMatrix() {
         // 创建单位矩阵
@@ -725,22 +371,15 @@ public class MyMinecraft {
         return model;
     }
     
-    private void uploadMatrix4f(String varName, float[] matrix) {
-        int varLocation = glGetUniformLocation(shaderProgram, varName);
-        FloatBuffer matrixBuffer = createFloatBuffer(16);
-        matrixBuffer.put(matrix).flip();
-        glUniformMatrix4fv(varLocation, false, matrixBuffer);
-    }
     
     private void cleanup() {
-        // 清理优化系统
-        if (renderBatch != null) renderBatch.cleanup();
+        // 清理简化渲染器
+        if (simpleRenderer != null) simpleRenderer.cleanup();
+        
+        // 清理着色器管理器
+        if (shaderManager != null) shaderManager.cleanup();
         
         // 删除渲染资源
-        if (vaoId != 0) glDeleteVertexArrays(vaoId);
-        if (vboId != 0) glDeleteBuffers(vboId);
-        if (eboId != 0) glDeleteBuffers(eboId);
-        if (shaderProgram != 0) glDeleteProgram(shaderProgram);
         if (textureId != 0) glDeleteTextures(textureId);
     }
     

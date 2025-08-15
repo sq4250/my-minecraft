@@ -1,4 +1,4 @@
-package com.tsian;
+package com.tsian.world;
 
 /**
  * 方块类 - 表示世界中的一个方块

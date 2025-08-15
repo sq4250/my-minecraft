@@ -1,19 +1,26 @@
-package com.tsian;
+package com.tsian.world;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * 世界类 - 简单的3x3x3方块世界
+ * 世界类 - 优化的方块世界
  */
 public class World {
     
     private List<Block> blocks;
+    private Map<String, Block> blockMap; // 快速查找映射
+    private List<VisibleFace> cachedVisibleFaces; // 缓存的可见面
     
     public World() {
         this.blocks = new ArrayList<>();
+        this.blockMap = new HashMap<>();
         generateSimpleWorld();
-        System.out.println("Initialized simple 3x3x3 world with " + blocks.size() + " blocks");
+        calculateVisibleFaces(); // 预计算可见面
+        System.out.println("Initialized optimized world with " + blocks.size() + " blocks, " +
+                          cachedVisibleFaces.size() + " visible faces");
     }
     
     /**
@@ -23,8 +30,8 @@ public class World {
         blocks.clear();
         
         // 石头层 (y=0): 3x3
-        for (int x = -1; x <= 1; x++) {
-            for (int z = -1; z <= 1; z++) {
+        for (int x = -5; x <= 5; x++) {
+            for (int z = -5; z <= 5; z++) {
                 blocks.add(new Block(x, 0, z, Block.BlockType.STONE));
             }
         }
@@ -42,13 +49,24 @@ public class World {
                 blocks.add(new Block(x, 2, z, Block.BlockType.WATER));
             }
         }
+        // 将方块添加到快速查找映射
+        for (Block block : blocks) {
+            blockMap.put(getBlockKey(block.getX(), block.getY(), block.getZ()), block);
+        }
     }
     
     /**
-     * 获取所有可见面
+     * 获取方块键值（用于HashMap查找）
      */
-    public List<VisibleFace> getVisibleFaces() {
-        List<VisibleFace> visibleFaces = new ArrayList<>();
+    private String getBlockKey(int x, int y, int z) {
+        return x + "," + y + "," + z;
+    }
+    
+    /**
+     * 预计算所有可见面
+     */
+    private void calculateVisibleFaces() {
+        cachedVisibleFaces = new ArrayList<>();
         
         for (Block block : blocks) {
             if (block.getType() == Block.BlockType.AIR) continue;
@@ -56,12 +74,19 @@ public class World {
             // 检查每个面是否可见
             for (int face = 0; face < 6; face++) {
                 if (isFaceVisible(block, face)) {
-                    visibleFaces.add(new VisibleFace(block, face));
+                    cachedVisibleFaces.add(new VisibleFace(block, face));
                 }
             }
         }
         
-        return visibleFaces;
+        System.out.println("Pre-calculated " + cachedVisibleFaces.size() + " visible faces");
+    }
+    
+    /**
+     * 获取所有可见面（使用缓存）
+     */
+    public List<VisibleFace> getVisibleFaces() {
+        return cachedVisibleFaces;
     }
     
     /**
@@ -113,18 +138,10 @@ public class World {
     }
     
     /**
-     * 检查指定位置是否有实心方块
-     */
-    /**
-     * 获取指定位置的方块
+     * 获取指定位置的方块（O(1)查找）
      */
     private Block getBlockAt(int x, int y, int z) {
-        for (Block block : blocks) {
-            if (block.getX() == x && block.getY() == y && block.getZ() == z) {
-                return block;
-            }
-        }
-        return null;
+        return blockMap.get(getBlockKey(x, y, z));
     }
     
     /**
