@@ -153,7 +153,7 @@ public class MyMinecraft {
         
         // 更新方块交互
         if (inputHandler != null) {
-            inputHandler.updateBlockInteraction(currentFrameTime);
+            inputHandler.updateBlockInteraction(currentFrameTime, deltaTime);
         }
         
         // 检查是否需要重新构建网格

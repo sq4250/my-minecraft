@@ -5,6 +5,12 @@ import java.util.Map;
 
 /**
  * 区块管理器 - 管理固定4x4区块空岛
+ *
+ * 负责：
+ * - 管理所有已加载的区块
+ * - 提供世界级别的方块操作接口（坐标验证、区块查找等）
+ * - 协调区块的加载和初始化
+ * - 作为World类和Chunk类之间的中介
  */
 public class ChunkManager {
     

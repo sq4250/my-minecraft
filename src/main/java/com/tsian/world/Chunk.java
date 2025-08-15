@@ -5,6 +5,11 @@ import java.util.Map;
 
 /**
  * 区块类 - 代表一个16x16的方块区域
+ *
+ * 负责：
+ * - 存储和管理区块内的方块数据
+ * - 提供区块级别的方块操作方法
+ * - 验证坐标是否在区块范围内
  */
 public class Chunk {
     
@@ -23,32 +28,6 @@ public class Chunk {
         this.needsRebuild = true;
     }
     
-    /**
-     * 生成超平坦地形
-     * 从上到下：草方块(y=3) 泥块(y=2) 泥块(y=1) 圆石(y=0)
-     */
-    public void generateFlatTerrain() {
-        if (isGenerated) return;
-        
-        // 生成16x16区域的超平坦地形
-        for (int x = 0; x < CHUNK_SIZE; x++) {
-            for (int z = 0; z < CHUNK_SIZE; z++) {
-                // 计算世界坐标
-                int worldX = chunkX * CHUNK_SIZE + x;
-                int worldZ = chunkZ * CHUNK_SIZE + z;
-                
-                // 生成4层方块
-                setBlock(worldX, 0, worldZ, Block.BlockType.STONE);    // 底层：圆石
-                setBlock(worldX, 1, worldZ, Block.BlockType.DIRT);     // 第二层：泥块
-                setBlock(worldX, 2, worldZ, Block.BlockType.DIRT);     // 第三层：泥块
-                setBlock(worldX, 3, worldZ, Block.BlockType.GRASS);    // 顶层：草方块
-            }
-        }
-        
-        isGenerated = true;
-        needsRebuild = true;
-        System.out.println("Generated flat terrain for chunk (" + chunkX + ", " + chunkZ + ")");
-    }
     
     /**
      * 在区块中设置方块

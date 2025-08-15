@@ -24,6 +24,11 @@ public class InputHandler {
     
     // 鼠标按键状态
     private boolean leftMousePressed = false;
+    private boolean rightMousePressed = false;
+    
+    // 连续放置方块的定时器
+    private float lastPlaceTime = 0;
+    private static final float PLACE_DELAY = 0.2f; // 200ms放置间隔
     
     public InputHandler(MyMinecraft game, WindowManager windowManager, Camera camera, 
                        Player player, BlockInteractionManager interactionManager) {
@@ -117,9 +122,13 @@ public class InputHandler {
                     if (!mouseCaptured) {
                         captureMouse();
                     } else {
-                        // 放置木板方块
+                        // 开始连续放置方块
+                        rightMousePressed = true;
                         handleRightClick();
                     }
+                } else if (action == GLFW_RELEASE) {
+                    // 停止连续放置方块
+                    rightMousePressed = false;
                 }
             }
         });
@@ -204,7 +213,7 @@ public class InputHandler {
     /**
      * 更新方块交互
      */
-    public void updateBlockInteraction(float currentTime) {
+    public void updateBlockInteraction(float currentTime, float deltaTime) {
         if (interactionManager == null) return;
         
         // 使用精确的屏幕中心射线方向
@@ -220,28 +229,77 @@ public class InputHandler {
             cameraDirection[0], cameraDirection[1], cameraDirection[2]
         );
         
-        // 如果鼠标没有按下，只是更新目标方块（用于显示十字标记）
-        if (!leftMousePressed) {
+        // 处理连续破坏方块
+        if (leftMousePressed) {
+            if (result.hit) {
+                // 如果当前没有在破坏方块，开始破坏
+                if (!interactionManager.isBreaking()) {
+                    interactionManager.setTargetBlock(result.block, result.face);
+                    interactionManager.startBreaking(currentTime);
+                }
+                // 如果已经在破坏同一个方块，继续破坏
+                else if (result.block == interactionManager.getTargetBlock()) {
+                    interactionManager.updateBreaking(currentTime);
+                    
+                    // 检查是否需要重新构建渲染缓冲区（方块被破坏后）
+                    if (interactionManager.needsMeshRebuild()) {
+                        // 通知游戏需要重新构建网格
+                        game.onMeshRebuildNeeded();
+                        interactionManager.markMeshRebuilt();
+                    }
+                }
+                // 如果目标方块改变，重新开始破坏
+                else {
+                    interactionManager.stopBreaking();
+                    interactionManager.setTargetBlock(result.block, result.face);
+                    interactionManager.startBreaking(currentTime);
+                }
+            } else {
+                // 没有击中方块，停止破坏
+                interactionManager.stopBreaking();
+                interactionManager.setTargetBlock(null, -1);
+            }
+        }
+        // 处理连续放置方块
+        else if (rightMousePressed) {
+            // 更新放置定时器
+            lastPlaceTime += deltaTime;
+            
+            // 如果达到放置间隔，尝试放置方块
+            if (lastPlaceTime >= PLACE_DELAY) {
+                if (result.hit) {
+                    // 尝试放置木板方块
+                    boolean success = interactionManager.placeBlock(
+                        rayStartX, rayStartY, rayStartZ,
+                        cameraDirection[0], cameraDirection[1], cameraDirection[2],
+                        com.tsian.world.Block.BlockType.WOOD_PLANK
+                    );
+                    
+                    if (success) {
+                        // 如果放置成功，通知游戏需要重新构建网格
+                        game.onMeshRebuildNeeded();
+                        System.out.println("木板放置成功!");
+                    } else {
+                        System.out.println("无法在此位置放置木板");
+                    }
+                }
+                
+                // 重置放置定时器
+                lastPlaceTime = 0;
+            }
+            
+            // 更新目标方块显示
             if (result.hit) {
                 interactionManager.setTargetBlock(result.block, result.face);
             } else {
                 interactionManager.setTargetBlock(null, -1);
             }
-        } else {
-            // 如果鼠标按下，检查是否还在同一个方块上
-            if (result.hit && result.block == interactionManager.getTargetBlock()) {
-                // 继续破坏
-                interactionManager.updateBreaking(currentTime);
-                
-                // 检查是否需要重新构建渲染缓冲区（方块被破坏后）
-                if (interactionManager.needsMeshRebuild()) {
-                    // 通知游戏需要重新构建网格
-                    game.onMeshRebuildNeeded();
-                    interactionManager.markMeshRebuilt();
-                }
+        }
+        // 如果鼠标没有按下，只是更新目标方块（用于显示十字标记）
+        else {
+            if (result.hit) {
+                interactionManager.setTargetBlock(result.block, result.face);
             } else {
-                // 目标改变，停止破坏
-                interactionManager.stopBreaking();
                 interactionManager.setTargetBlock(null, -1);
             }
         }
