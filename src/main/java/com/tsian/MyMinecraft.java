@@ -56,6 +56,10 @@ public class MyMinecraft {
     private Camera camera;
     private float lastFrameTime;
     
+    // 渲染优化系统
+    private RenderBatch renderBatch;
+    private LODSystem lodSystem;
+    
     // 鼠标状态
     private boolean firstMouse = true;
     private boolean mouseCaptured = false;
@@ -339,14 +343,15 @@ public class MyMinecraft {
         shaderProgram = createShaderProgram();
         System.out.println("Shader program created with ID: " + shaderProgram);
         
-        // 创建VAO和缓冲区
+        // 初始化优化系统
+        renderBatch = new RenderBatch();
+        lodSystem = new LODSystem();
+        System.out.println("Render optimization systems initialized");
+        
+        // 创建VAO和缓冲区（保持兼容性）
         vaoId = glGenVertexArrays();
         vboId = glGenBuffers();
         eboId = glGenBuffers();
-        
-        // 初始生成世界几何数据
-        generateWorldGeometry();
-        setupBuffers();
     }
     
     /**
@@ -566,22 +571,10 @@ public class MyMinecraft {
     }
     
     private void render() {
-        // 检查是否需要重新生成几何数据
         frameCount++;
-        
-        // 每30帧检查一次是否需要更新几何数据
-        if (frameCount - lastGeometryUpdate > 30) {
-            generateWorldGeometry();
-            setupBuffers();
-            lastGeometryUpdate = frameCount;
-        }
         
         // 使用着色器程序
         glUseProgram(shaderProgram);
-        
-        // 绑定纹理
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId);
         
         // 设置纹理uniform
         int textureLocation = glGetUniformLocation(shaderProgram, "ourTexture");
@@ -590,19 +583,128 @@ public class MyMinecraft {
         // 创建变换矩阵
         float[] modelMatrix = createModelMatrix();
         float[] viewMatrix = camera.getViewMatrix();
-        float[] projectionMatrix = Camera.perspective(45.0f, (float)currentWidth / (float)currentHeight, 0.1f, 100.0f);
+        float[] projectionMatrix = Camera.perspective(45.0f, (float)currentWidth / (float)currentHeight, 0.1f, 1000.0f);
         
         // 传递矩阵uniform
         uploadMatrix4f("model", modelMatrix);
         uploadMatrix4f("view", viewMatrix);
         uploadMatrix4f("projection", projectionMatrix);
         
-        // 绘制
-        if (vertexCount > 0) {
-            glBindVertexArray(vaoId);
-            glDrawElements(GL_TRIANGLES, vertexCount, GL_UNSIGNED_INT, 0);
-            glBindVertexArray(0);
+        // 更新优化系统
+        updateOptimizationSystems(viewMatrix, projectionMatrix);
+        
+        // 优化渲染
+        renderOptimized();
+    }
+    
+    /**
+     * 更新优化系统
+     */
+    private void updateOptimizationSystems(float[] viewMatrix, float[] projectionMatrix) {
+        // 更新LOD系统摄像机位置
+        lodSystem.updateCameraPosition(camera.getX(), camera.getY(), camera.getZ());
+    }
+    
+    /**
+     * 优化渲染 - 整合视锥剔除、LOD和批量渲染
+     */
+    private void renderOptimized() {
+        // 清空批次
+        renderBatch.clear();
+        
+        // 统计变量
+        int totalBlocks = 0;
+        int lodCulled = 0;
+        int rendered = 0;
+        
+        // 获取所有可见面
+        var visibleFaces = world.getVisibleFaces();
+        
+        for (World.VisibleFace visibleFace : visibleFaces) {
+            Block block = visibleFace.block;
+            int face = visibleFace.face;
+            totalBlocks++;
+            
+            // 1. LOD剔除
+            LODSystem.LODLevel lodLevel = lodSystem.getLODLevel(block);
+            if (lodLevel == LODSystem.LODLevel.CULLED) {
+                lodCulled++;
+                continue;
+            }
+            
+            // 2. LOD面剔除
+            if (!lodSystem.shouldRenderFace(block, face, lodLevel)) {
+                continue;
+            }
+            
+            // 3. 生成面的几何数据
+            float[] faceVertices = generateFaceVertices(block, face);
+            int[] faceIndices = generateFaceIndices();
+            
+            // 4. 添加到批次
+            renderBatch.addFace(block, face, faceVertices, faceIndices);
+            rendered++;
         }
+        
+        // 批量渲染
+        renderBatch.render(shaderProgram, textureId);
+        
+        // 输出统计信息（每60帧输出一次）
+        if (frameCount % 60 == 0) {
+            System.out.printf("Render Stats - Total: %d, LOD Culled: %d, Rendered: %d%n",
+                            totalBlocks, lodCulled, rendered);
+            
+            // LOD统计
+            LODSystem.LODStats lodStats = lodSystem.calculateStats(world.getBlocks());
+            System.out.println("  " + lodStats);
+            
+            // 批次统计
+            RenderBatch.BatchStats batchStats = renderBatch.getStats();
+            System.out.println("  " + batchStats);
+        }
+    }
+    
+    /**
+     * 生成单个面的顶点数据
+     */
+    private float[] generateFaceVertices(Block block, int face) {
+        float blockX = block.getX();
+        float blockY = block.getY();
+        float blockZ = block.getZ();
+        
+        // 获取面的顶点坐标
+        float[][] vertices = getFaceVertices(blockX, blockY, blockZ, face);
+        
+        // 获取纹理坐标
+        float[] texCoords = block.getTextureCoords(face);
+        float u1 = texCoords[0], v1 = texCoords[1];
+        float u2 = texCoords[2], v2 = texCoords[3];
+        
+        // 组装顶点数据 (每个顶点5个float: x,y,z,u,v)
+        float[] faceVertices = new float[20]; // 4个顶点 * 5个float
+        int index = 0;
+        
+        for (int i = 0; i < 4; i++) {
+            faceVertices[index++] = vertices[i][0]; // x
+            faceVertices[index++] = vertices[i][1]; // y
+            faceVertices[index++] = vertices[i][2]; // z
+            
+            // 纹理坐标
+            float u = (i == 1 || i == 2) ? u2 : u1;
+            float v = (i == 2 || i == 3) ? v1 : v2;
+            faceVertices[index++] = u;
+            faceVertices[index++] = v;
+        }
+        
+        return faceVertices;
+    }
+    
+    /**
+     * 生成面的索引数据
+     */
+    private int[] generateFaceIndices() {
+        // 每个面2个三角形
+        return new int[]{0, 1, 2, 2, 3, 0};
     }
     
     private float[] createModelMatrix() {
@@ -620,6 +722,9 @@ public class MyMinecraft {
     }
     
     private void cleanup() {
+        // 清理优化系统
+        if (renderBatch != null) renderBatch.cleanup();
+        
         // 删除渲染资源
         if (vaoId != 0) glDeleteVertexArrays(vaoId);
         if (vboId != 0) glDeleteBuffers(vboId);

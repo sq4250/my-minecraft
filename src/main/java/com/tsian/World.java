@@ -17,28 +17,29 @@ public class World {
     }
     
     /**
-     * 生成简单的3x3x3世界
+     * 生成多层世界 - 泥土层为7x7
      */
     private void generateSimpleWorld() {
         blocks.clear();
         
-        // 生成3x3x3的方块世界 (27个方块)
+        // 石头层 (y=0): 3x3
         for (int x = -1; x <= 1; x++) {
-            for (int y = 0; y <= 2; y++) {
-                for (int z = -1; z <= 1; z++) {
-                    Block.BlockType type;
-                    
-                    // 简单的方块类型分配
-                    if (y == 0) {
-                        type = Block.BlockType.STONE;
-                    } else if (y == 1) {
-                        type = Block.BlockType.DIRT;
-                    } else {
-                        type = Block.BlockType.GRASS;
-                    }
-                    
-                    blocks.add(new Block(x, y, z, type));
-                }
+            for (int z = -1; z <= 1; z++) {
+                blocks.add(new Block(x, 0, z, Block.BlockType.STONE));
+            }
+        }
+        
+        // 泥土层 (y=1): 7x7
+        for (int x = -3; x <= 3; x++) {
+            for (int z = -3; z <= 3; z++) {
+                blocks.add(new Block(x, 1, z, Block.BlockType.DIRT));
+            }
+        }
+        
+        // 水层 (y=2): 3x3 (只在泥土中央区域)
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                blocks.add(new Block(x, 2, z, Block.BlockType.WATER));
             }
         }
     }
@@ -50,7 +51,7 @@ public class World {
         List<VisibleFace> visibleFaces = new ArrayList<>();
         
         for (Block block : blocks) {
-            if (!block.isSolid()) continue;
+            if (block.getType() == Block.BlockType.AIR) continue;
             
             // 检查每个面是否可见
             for (int face = 0; face < 6; face++) {
@@ -83,20 +84,47 @@ public class World {
             case 5: adjY--; break; // 下面
         }
         
-        // 如果相邻位置没有实心方块，则该面可见
-        return !hasSolidBlockAt(adjX, adjY, adjZ);
+        // 获取相邻方块
+        Block adjacentBlock = getBlockAt(adjX, adjY, adjZ);
+        
+        // 如果没有相邻方块，面可见
+        if (adjacentBlock == null || adjacentBlock.getType() == Block.BlockType.AIR) {
+            return true;
+        }
+        
+        // 如果是相同类型的方块，面不可见（剔除）
+        if (block.getType() == adjacentBlock.getType()) {
+            return false;
+        }
+        
+        // 水的特殊处理：
+        // 当前方块是水，相邻是任何非空气方块 -> 水面可见
+        if (block.getType() == Block.BlockType.WATER) {
+            return true;
+        }
+        
+        // 当前方块是固体，相邻是水 -> 固体面可见（透过水看到）
+        if (block.isSolid() && adjacentBlock.getType() == Block.BlockType.WATER) {
+            return true;
+        }
+        
+        // 默认：相邻是固体则面不可见
+        return !adjacentBlock.isSolid();
     }
     
     /**
      * 检查指定位置是否有实心方块
      */
-    private boolean hasSolidBlockAt(int x, int y, int z) {
+    /**
+     * 获取指定位置的方块
+     */
+    private Block getBlockAt(int x, int y, int z) {
         for (Block block : blocks) {
             if (block.getX() == x && block.getY() == y && block.getZ() == z) {
-                return block.isSolid();
+                return block;
             }
         }
-        return false;
+        return null;
     }
     
     /**
