@@ -19,7 +19,7 @@ import static org.lwjgl.opengl.GL30.*;
  */
 public class SimpleRenderer {
     
-    private static final int FLOATS_PER_VERTEX = 9; // x,y,z,u,v,nx,ny,nz,blockType
+    private static final int FLOATS_PER_VERTEX = 6; // x,y,z,u,v,blockType
     
     // 渲染资源 - 不透明方块
     private int opaqueVaoId;
@@ -75,13 +75,9 @@ public class SimpleRenderer {
         glVertexAttribPointer(1, 2, GL_FLOAT, false, FLOATS_PER_VERTEX * Float.BYTES, 3 * Float.BYTES);
         glEnableVertexAttribArray(1);
         
-        // 法向量属性 (location = 2)
-        glVertexAttribPointer(2, 3, GL_FLOAT, false, FLOATS_PER_VERTEX * Float.BYTES, 5 * Float.BYTES);
+        // 方块类型属性 (location = 2)
+        glVertexAttribPointer(2, 1, GL_FLOAT, false, FLOATS_PER_VERTEX * Float.BYTES, 5 * Float.BYTES);
         glEnableVertexAttribArray(2);
-        
-        // 方块类型属性 (location = 3)
-        glVertexAttribPointer(3, 1, GL_FLOAT, false, FLOATS_PER_VERTEX * Float.BYTES, 8 * Float.BYTES);
-        glEnableVertexAttribArray(3);
         
         glBindVertexArray(0);
     }
@@ -241,9 +237,6 @@ public class SimpleRenderer {
         float u1 = texCoords[0], v1 = texCoords[1];
         float u2 = texCoords[2], v2 = texCoords[3];
         
-        // 获取面法向量
-        float[] normal = getFaceNormal(face);
-        
         // 添加4个顶点数据
         for (int i = 0; i < 4; i++) {
             vertexBuffer.put(vertices[i][0]); // x
@@ -255,11 +248,6 @@ public class SimpleRenderer {
             float v = (i == 2 || i == 3) ? v1 : v2;
             vertexBuffer.put(u);
             vertexBuffer.put(v);
-            
-            // 法向量
-            vertexBuffer.put(normal[0]); // nx
-            vertexBuffer.put(normal[1]); // ny
-            vertexBuffer.put(normal[2]); // nz
             
             // 方块类型ID
             vertexBuffer.put((float) block.getType().getId());
@@ -398,18 +386,4 @@ public class SimpleRenderer {
         }
     }
     
-    /**
-     * 获取面的法向量
-     */
-    private float[] getFaceNormal(int face) {
-        switch (face) {
-            case 0: return new float[]{0.0f, 0.0f, 1.0f};  // 前面 (+Z)
-            case 1: return new float[]{0.0f, 0.0f, -1.0f}; // 后面 (-Z)
-            case 2: return new float[]{-1.0f, 0.0f, 0.0f}; // 左面 (-X)
-            case 3: return new float[]{1.0f, 0.0f, 0.0f};  // 右面 (+X)
-            case 4: return new float[]{0.0f, 1.0f, 0.0f};  // 上面 (+Y)
-            case 5: return new float[]{0.0f, -1.0f, 0.0f}; // 下面 (-Y)
-            default: return new float[]{0.0f, 1.0f, 0.0f};
-        }
-    }
 }

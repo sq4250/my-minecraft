@@ -86,9 +86,6 @@ public class RenderManager {
         int textureLocation = glGetUniformLocation(shaderProgram, "ourTexture");
         glUniform1i(textureLocation, 0);
         
-        // 设置光照参数
-        setupLighting();
-        
         // 设置破坏效果参数
         setupBreakingEffect(camera);
         
@@ -125,27 +122,6 @@ public class RenderManager {
         float[] model = new float[16];
         model[0] = 1.0f; model[5] = 1.0f; model[10] = 1.0f; model[15] = 1.0f;
         return model;
-    }
-    
-    /**
-     * 设置光照参数
-     */
-    private void setupLighting() {
-        // 固定的全局光照方向（从右上前方照射，角度更温和）
-        int lightDirLocation = glGetUniformLocation(shaderProgram, "lightDirection");
-        glUniform3f(lightDirLocation, 0.6f, -0.8f, 0.4f);
-        
-        // 光照颜色（温暖的白色，稍微降低强度）
-        int lightColorLocation = glGetUniformLocation(shaderProgram, "lightColor");
-        glUniform3f(lightColorLocation, 0.9f, 0.85f, 0.7f);
-        
-        // 环境光颜色（更温暖的蓝白色，增加整体亮度）
-        int ambientColorLocation = glGetUniformLocation(shaderProgram, "ambientColor");
-        glUniform3f(ambientColorLocation, 0.6f, 0.7f, 0.9f);
-        
-        // 环境光强度（提高基础亮度）
-        int ambientStrengthLocation = glGetUniformLocation(shaderProgram, "ambientStrength");
-        glUniform1f(ambientStrengthLocation, 0.5f);
     }
     
     /**
