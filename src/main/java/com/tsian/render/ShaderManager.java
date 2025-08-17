@@ -115,6 +115,14 @@ public class ShaderManager {
         glUniformMatrix4fv(varLocation, false, matrixBuffer);
     }
     
+    /**
+     * 上传vec3 uniform
+     */
+    public void uploadVector3f(int program, String varName, float x, float y, float z) {
+        int varLocation = glGetUniformLocation(program, varName);
+        glUniform3f(varLocation, x, y, z);
+    }
+    
     
     /**
      * 清理资源

@@ -124,7 +124,10 @@ public class InputHandler {
                     } else {
                         // 开始连续放置方块
                         rightMousePressed = true;
+                        // 立即放置第一个方块
                         handleRightClick();
+                        // 重置放置定时器，避免立即放置第二个方块
+                        lastPlaceTime = 0;
                     }
                 } else if (action == GLFW_RELEASE) {
                     // 停止连续放置方块

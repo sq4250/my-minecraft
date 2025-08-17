@@ -4,19 +4,64 @@ out vec4 FragColor;
 in vec2 TexCoord;
 in vec3 FragPos;
 in float BlockType;
+in vec3 Normal;     // 接收法线
+in vec2 VertexCoord; // 接收顶点在面中的坐标
+in float AOOcclusion; // 接收AO遮蔽值
 
 uniform sampler2D ourTexture;
+uniform vec3 lightDirection;  // 光照方向
+uniform float ambientLight;   // 环境光强度
+
+// 环境光遮蔽参数
+uniform float aoStrength;     // AO强度 (0.0 - 1.0) - 增强边缘效果
 
 // 破坏效果参数
 uniform float breakProgress;  // 破坏进度 (0.0 - 1.0)
 uniform vec3 targetBlockPos;  // 目标方块位置
 uniform int targetFace;       // 目标面
 
+// 计算平滑环境光遮蔽 (使用插值后的AO值)
+float calculateSmoothAO(vec2 vertexCoord, float occlusion) {
+    // 只在有遮蔽时才应用AO效果
+    if (occlusion <= 0.0) {
+        return 0.0;
+    }
+    
+    // 计算顶点到最近边缘的距离
+    float distToEdgeX = min(vertexCoord.x, 1.0 - vertexCoord.x);
+    float distToEdgeY = min(vertexCoord.y, 1.0 - vertexCoord.y);
+    float minDistToEdge = min(distToEdgeX, distToEdgeY);
+    
+    // 使用 smoothstep 创建平滑过渡
+    // 在距离边缘 0.0-0.3 范围内应用 AO 效果
+    float aoRange = 0.3;
+    float aoFactor = 1.0 - smoothstep(0.0, aoRange, minDistToEdge);
+    
+    return aoFactor * occlusion;
+}
+
 void main() {
     // 获取纹理颜色
     vec4 texColor = texture(ourTexture, TexCoord);
     if(texColor.a < 0.1)
         discard;
+    
+    // 计算漫反射光照
+    // 标准化法线和光线方向
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(-lightDirection);  // 负号是因为光照方向通常定义为从光源指向片段
+    
+    // 计算漫反射因子
+    float diff = max(dot(norm, lightDir), 0.0);
+    
+    // 计算平滑环境光遮蔽 (使用插值后的AO值)
+    float aoFactor = calculateSmoothAO(VertexCoord, AOOcclusion);
+    float aoEffect = 1.0 - (aoFactor * aoStrength);
+    
+    // 计算总光照 (环境光 + 漫反射) * AO
+    float lightingFactor = (ambientLight + (1.0 - ambientLight) * diff) * aoEffect;
+    // 确保最小光照强度
+    lightingFactor = max(lightingFactor, 0.1);
     
     // 根据方块类型调整颜色
     vec3 blockColorTint = vec3(1.0); // 默认无色调
@@ -26,6 +71,9 @@ void main() {
         blockColorTint = vec3(0.1, 0.4, 1.0); // 蓝色调
         texColor.rgb = mix(texColor.rgb, texColor.rgb * blockColorTint, 0.8); // 混合80%的蓝色调
     }
+    
+    // 应用光照
+    vec3 lighting = lightingFactor * texColor.rgb;
     
     // 破坏纹理叠加 - 检查片段是否在目标方块内
     if (breakProgress > 0.0 &&
@@ -63,7 +111,7 @@ void main() {
         vec4 breakTexColor = texture(ourTexture, breakTexCoord);
         // 混合破坏纹理
         if (breakTexColor.a > 0.1) {
-            texColor.rgb = mix(texColor.rgb, breakTexColor.rgb, breakTexColor.a * 0.8);
+            lighting = mix(lighting, breakTexColor.rgb, breakTexColor.a * 0.8);
         }
     }
     
@@ -74,8 +122,8 @@ void main() {
         targetBlockPos.x > -900.0) { // 确保有有效的目标方块
         
         // 提高被选中方块的亮度
-        texColor.rgb = texColor.rgb * 1.3; // 增加30%亮度
+        lighting = lighting * 1.3; // 增加30%亮度
     }
     
-    FragColor = vec4(texColor.rgb, texColor.a);
+    FragColor = vec4(lighting, texColor.a);
 }

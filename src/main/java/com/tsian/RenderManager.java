@@ -92,6 +92,9 @@ public class RenderManager {
         // 传递矩阵uniform
         uploadMatrices(camera, windowWidth, windowHeight);
         
+        // 设置光照方向uniform (固定方向光)
+        setupLighting();
+        
         // 简化渲染 - 传递摄像头位置用于透明方块排序
         simpleRenderer.render(textureId, camera.getX(), camera.getY(), camera.getZ());
         
@@ -148,6 +151,23 @@ public class RenderManager {
             int targetFaceLocation = glGetUniformLocation(shaderProgram, "targetFace");
             glUniform1i(targetFaceLocation, interactionManager.getTargetFace());
         }
+    }
+    
+    /**
+     * 设置光照参数
+     */
+    private void setupLighting() {
+        // 设置固定方向光 (从上方 slightly 偏斜的光照)
+        int lightDirectionLocation = glGetUniformLocation(shaderProgram, "lightDirection");
+        glUniform3f(lightDirectionLocation, -0.5f, -1.0f, -0.5f);  // 从上方偏斜的光照方向
+        
+        // 设置环境光强度
+        int ambientLightLocation = glGetUniformLocation(shaderProgram, "ambientLight");
+        glUniform1f(ambientLightLocation, 0.3f);  // 30% 环境光
+        
+        // 设置环境光遮蔽强度
+        int aoStrengthLocation = glGetUniformLocation(shaderProgram, "aoStrength");
+        glUniform1f(aoStrengthLocation, 0.7f);  // 70% AO 强度 - 增强边缘效果
     }
     
     /**
