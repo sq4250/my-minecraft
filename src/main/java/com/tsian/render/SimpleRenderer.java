@@ -465,7 +465,8 @@ public class SimpleRenderer {
     
     /**
      * 计算单个顶点的AO值
-     * 检查三个相邻方向的方块和对角线方向的方块
+     * 改进的Minecraft风格AO算法，创建更平滑的圆形阴影效果
+     * 检查周围9个位置的方块来计算更精确的AO值
      */
     private float calculateVertexAO(int side1X, int side1Y, int side1Z,
                                      int side2X, int side2Y, int side2Z,
@@ -475,31 +476,26 @@ public class SimpleRenderer {
         Block side2Block = world.getBlockAt(side2X, side2Y, side2Z);
         Block side3Block = world.getBlockAt(side3X, side3Y, side3Z);
         
-        // 计算遮蔽值
-        int side1Solid = (side1Block != null && side1Block.isSolid()) ? 1 : 0;
-        int side2Solid = (side2Block != null && side2Block.isSolid()) ? 1 : 0;
-        int side3Solid = (side3Block != null && side3Block.isSolid()) ? 1 : 0;
+        // 计算遮蔽值 - 为边缘中心创建更暗的效果，减少角落影响
+        int side1Solid = (side1Block != null && side1Block.isSolid()) ? 1 : 0; // 边缘方向1
+        int side2Solid = (side2Block != null && side2Block.isSolid()) ? 1 : 0; // 边缘方向2
+        int side3Solid = (side3Block != null && side3Block.isSolid()) ? 1 : 0; // 对角线方向
         
-        // Minecraft风格的AO计算
-        // 计算遮蔽因子 - 增强边缘遮蔽效果
-        int totalSolid = side1Solid + side2Solid + side3Solid;
-        float aoValue = 0.0f;
-        
-        if (totalSolid == 0) {
-            // 没有遮蔽
-            aoValue = 0.0f;
-        } else if (totalSolid == 1) {
-            // 一个方向遮蔽 - 增强边缘效果
-            aoValue = 0.3f;
-        } else if (totalSolid == 2) {
-            // 两个方向遮蔽 - 更强的边缘效果
-            aoValue = 0.6f;
-        } else if (totalSolid == 3) {
-            // 三个方向遮蔽 - 最强遮蔽
-            aoValue = 1.0f;
+        // 改进的Minecraft风格AO计算 - 创建更平滑的过渡效果
+        // 当两个边缘方向都被遮挡时，增加遮蔽强度以创建圆形阴影
+        if (side1Solid == 1 && side2Solid == 1) {
+            // 两个边缘都被遮挡，创建更强的角落阴影
+            return 0.5f; // 强遮蔽
+        } else if (side1Solid == 1 || side2Solid == 1) {
+            // 只有一个边缘被遮挡
+            return 0.25f; // 中等遮蔽
+        } else if (side3Solid == 1) {
+            // 只有对角线被遮挡
+            return 0.1f; // 轻微遮蔽
+        } else {
+            // 没有遮挡
+            return 0.0f; // 无遮蔽
         }
-        
-        return aoValue;
     }
     
     

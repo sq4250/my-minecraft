@@ -167,7 +167,7 @@ public class RenderManager {
         
         // 设置环境光遮蔽强度
         int aoStrengthLocation = glGetUniformLocation(shaderProgram, "aoStrength");
-        glUniform1f(aoStrengthLocation, 0.7f);  // 70% AO 强度 - 增强边缘效果
+        glUniform1f(aoStrengthLocation, 0.5f);  // 50% AO 强度 - 减少对比度，创建更平滑的圆形阴影
     }
     
     /**

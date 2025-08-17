@@ -20,24 +20,10 @@ uniform float breakProgress;  // 破坏进度 (0.0 - 1.0)
 uniform vec3 targetBlockPos;  // 目标方块位置
 uniform int targetFace;       // 目标面
 
-// 计算平滑环境光遮蔽 (使用插值后的AO值)
-float calculateSmoothAO(vec2 vertexCoord, float occlusion) {
-    // 只在有遮蔽时才应用AO效果
-    if (occlusion <= 0.0) {
-        return 0.0;
-    }
-    
-    // 计算顶点到最近边缘的距离
-    float distToEdgeX = min(vertexCoord.x, 1.0 - vertexCoord.x);
-    float distToEdgeY = min(vertexCoord.y, 1.0 - vertexCoord.y);
-    float minDistToEdge = min(distToEdgeX, distToEdgeY);
-    
-    // 使用 smoothstep 创建平滑过渡
-    // 在距离边缘 0.0-0.3 范围内应用 AO 效果
-    float aoRange = 0.3;
-    float aoFactor = 1.0 - smoothstep(0.0, aoRange, minDistToEdge);
-    
-    return aoFactor * occlusion;
+// 计算环境光遮蔽 (直接使用插值后的AO值，创建更自然的圆形阴影)
+float calculateAO(float occlusion) {
+    // 直接返回插值后的AO值，让GPU进行平滑插值
+    return occlusion;
 }
 
 void main() {
@@ -54,8 +40,8 @@ void main() {
     // 计算漫反射因子
     float diff = max(dot(norm, lightDir), 0.0);
     
-    // 计算平滑环境光遮蔽 (使用插值后的AO值)
-    float aoFactor = calculateSmoothAO(VertexCoord, AOOcclusion);
+    // 计算环境光遮蔽 (使用插值后的AO值)
+    float aoFactor = calculateAO(AOOcclusion);
     float aoEffect = 1.0 - (aoFactor * aoStrength);
     
     // 计算总光照 (环境光 + 漫反射) * AO
