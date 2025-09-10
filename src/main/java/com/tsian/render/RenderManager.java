@@ -1,9 +1,6 @@
-package com.tsian;
+package com.tsian.render;
 
-import com.tsian.render.ShaderManager;
-import com.tsian.render.SimpleRenderer;
-import com.tsian.render.TextureLoader;
-import com.tsian.render.UIRenderer;
+import com.tsian.Camera;
 import com.tsian.world.World;
 import com.tsian.world.BlockInteractionManager;
 
