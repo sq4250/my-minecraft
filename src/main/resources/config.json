@@ -42,7 +42,7 @@
     "title": "My Minecraft"
   },
   "block_interaction": {
-    "break_time": 1.0,
+    "break_time": 0.5,
     "max_reach_distance": 5.0
   }
 }

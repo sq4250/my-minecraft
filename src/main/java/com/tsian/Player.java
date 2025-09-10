@@ -1,6 +1,5 @@
 package com.tsian;
 
-import com.tsian.config.GameConfig;
 import com.tsian.world.World;
 import com.tsian.world.Block;
 
