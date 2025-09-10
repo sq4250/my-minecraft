@@ -1,5 +1,6 @@
 package com.tsian;
 
+import com.tsian.config.GameConfig;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.system.MemoryStack;
@@ -20,9 +21,9 @@ public class WindowManager {
     private long window;
     
     // 窗口尺寸
-    private static final int DEFAULT_WINDOW_WIDTH = 1024;
-    private static final int DEFAULT_WINDOW_HEIGHT = 768;
-    private static final String WINDOW_TITLE = "My Minecraft";
+    private int DEFAULT_WINDOW_WIDTH;
+    private int DEFAULT_WINDOW_HEIGHT;
+    private String WINDOW_TITLE;
     
     // 当前窗口尺寸
     private int currentWidth = DEFAULT_WINDOW_WIDTH;
@@ -35,6 +36,20 @@ public class WindowManager {
     private int windowedPosX, windowedPosY;
     
     public WindowManager() {
+        this(new GameConfig());
+    }
+    
+    public WindowManager(GameConfig config) {
+        // 使用配置中的参数
+        this.DEFAULT_WINDOW_WIDTH = config.window.defaultWidth;
+        this.DEFAULT_WINDOW_HEIGHT = config.window.defaultHeight;
+        this.WINDOW_TITLE = config.window.title;
+        
+        // 初始化当前窗口尺寸
+        this.currentWidth = DEFAULT_WINDOW_WIDTH;
+        this.currentHeight = DEFAULT_WINDOW_HEIGHT;
+        this.windowedWidth = DEFAULT_WINDOW_WIDTH;
+        this.windowedHeight = DEFAULT_WINDOW_HEIGHT;
     }
     
     /**

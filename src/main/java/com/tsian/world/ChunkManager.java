@@ -1,5 +1,6 @@
 package com.tsian.world;
 
+import com.tsian.config.GameConfig;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,15 +16,24 @@ import java.util.Map;
 public class ChunkManager {
     
     // 固定的空岛范围：4x4区块 (64x64方块)
-    private static final int ISLAND_SIZE = 4; // 4x4区块
-    private static final int ISLAND_MIN_CHUNK = 0; // 最小区块坐标
-    private static final int ISLAND_MAX_CHUNK = 3; // 最大区块坐标
+    private int ISLAND_SIZE; // 空岛大小（区块）
+    private int ISLAND_MIN_CHUNK; // 空岛最小区块坐标
+    private int ISLAND_MAX_CHUNK; // 空岛最大区块坐标
     
     private final Map<String, Chunk> loadedChunks; // 已加载的区块
     private boolean isInitialized = false; // 是否已初始化空岛
     
     public ChunkManager() {
+        this(new GameConfig());
+    }
+    
+    public ChunkManager(GameConfig config) {
         this.loadedChunks = new HashMap<>();
+        
+        // 使用配置中的参数
+        this.ISLAND_SIZE = config.world.islandSize;
+        this.ISLAND_MIN_CHUNK = config.world.islandMinChunk;
+        this.ISLAND_MAX_CHUNK = config.world.islandMaxChunk;
     }
     
     /**

@@ -1,5 +1,6 @@
 package com.tsian;
 
+import com.tsian.config.GameConfig;
 import com.tsian.world.World;
 import com.tsian.world.Block;
 
@@ -9,17 +10,17 @@ import com.tsian.world.Block;
 public class Player {
     
     // 玩家碰撞箱尺寸（以方块为单位，1方块 = 16像素）
-    private static final float PLAYER_WIDTH = 10.0f / 16.0f;   // 0.625方块宽
-    private static final float PLAYER_DEPTH = 10.0f / 16.0f;   // 0.625方块深
-    private static final float PLAYER_HEIGHT = 29.0f / 16.0f;  // 1.8125方块高
+    private float PLAYER_WIDTH;   // 0.625方块宽
+    private float PLAYER_DEPTH;   // 0.625方块深
+    private float PLAYER_HEIGHT;  // 1.8125方块高
     
     // 摄像机相对于玩家脚部的高度
-    private static final float CAMERA_HEIGHT = 26.0f / 16.0f;  // 1.625方块高
+    private float CAMERA_HEIGHT;  // 1.625方块高
     
     // 物理常量
-    private static final float GRAVITY = -20.0f;        // 重力加速度
-    private static final float TERMINAL_VELOCITY = -50.0f; // 最大下落速度
-    private static final float JUMP_VELOCITY = 8.0f;    // 跳跃初速度
+    private float GRAVITY;        // 重力加速度
+    private float TERMINAL_VELOCITY; // 最大下落速度
+    private float JUMP_VELOCITY;    // 跳跃初速度
     
     // 玩家位置（脚部中心点）
     private float x, y, z;
@@ -46,6 +47,10 @@ public class Player {
     private World world;
     
     public Player(float startX, float startY, float startZ, World world) {
+        this(startX, startY, startZ, world, new com.tsian.config.GameConfig());
+    }
+    
+    public Player(float startX, float startY, float startZ, World world, com.tsian.config.GameConfig config) {
         this.x = startX;
         this.y = startY;
         this.z = startZ;
@@ -57,6 +62,19 @@ public class Player {
         this.inWater = false;
         this.isFlying = false;
         this.spacePressed = false;
+        this.lastSpacePressTime = 0;
+        
+        // 使用配置中的参数
+        this.PLAYER_WIDTH = config.player.width;
+        this.PLAYER_DEPTH = config.player.depth;
+        this.PLAYER_HEIGHT = config.player.height;
+        this.CAMERA_HEIGHT = config.player.cameraHeight;
+        this.GRAVITY = config.player.gravity;
+        this.TERMINAL_VELOCITY = config.player.terminalVelocity;
+        this.JUMP_VELOCITY = config.player.jumpVelocity;
+        this.walkSpeed = config.player.walkSpeed;
+        this.sprintSpeed = config.player.sprintSpeed;
+        this.flySpeed = config.player.flySpeed;
         this.lastSpacePressTime = 0;
     }
     
@@ -424,8 +442,8 @@ public class Player {
     public boolean isFlying() { return isFlying; }
     
     // 碰撞箱尺寸Getter
-    public static float getPlayerWidth() { return PLAYER_WIDTH; }
-    public static float getPlayerHeight() { return PLAYER_HEIGHT; }
-    public static float getPlayerDepth() { return PLAYER_DEPTH; }
-    public static float getCameraHeight() { return CAMERA_HEIGHT; }
+    public float getPlayerWidth() { return PLAYER_WIDTH; }
+    public float getPlayerHeight() { return PLAYER_HEIGHT; }
+    public float getPlayerDepth() { return PLAYER_DEPTH; }
+    public float getCameraHeight() { return CAMERA_HEIGHT; }
 }

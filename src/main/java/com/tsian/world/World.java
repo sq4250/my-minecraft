@@ -23,7 +23,11 @@ public class World {
     private float lastPlayerZ = Float.MAX_VALUE;
     
     public World() {
-        this.chunkManager = new ChunkManager();
+        this(new com.tsian.config.GameConfig());
+    }
+    
+    public World(com.tsian.config.GameConfig config) {
+        this.chunkManager = new ChunkManager(config);
         this.cachedVisibleFaces = new ArrayList<>();
         System.out.println("Initialized chunk-based infinite world");
     }

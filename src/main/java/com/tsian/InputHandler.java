@@ -1,5 +1,6 @@
 package com.tsian;
 
+import com.tsian.config.GameConfig;
 import com.tsian.world.BlockInteractionManager;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -28,15 +29,23 @@ public class InputHandler {
     
     // 连续放置方块的定时器
     private float lastPlaceTime = 0;
-    private static final float PLACE_DELAY = 0.2f; // 200ms放置间隔
+    private float PLACE_DELAY; // 放置间隔（秒）
     
-    public InputHandler(MyMinecraft game, WindowManager windowManager, Camera camera, 
+    public InputHandler(MyMinecraft game, WindowManager windowManager, Camera camera,
                        Player player, BlockInteractionManager interactionManager) {
+        this(game, windowManager, camera, player, interactionManager, new GameConfig());
+    }
+    
+    public InputHandler(MyMinecraft game, WindowManager windowManager, Camera camera,
+                       Player player, BlockInteractionManager interactionManager, GameConfig config) {
         this.game = game;
         this.windowManager = windowManager;
         this.camera = camera;
         this.player = player;
         this.interactionManager = interactionManager;
+        
+        // 使用配置中的参数
+        this.PLACE_DELAY = config.input.placeDelay;
         
         // 初始化鼠标位置
         this.lastX = windowManager.getCurrentWidth() / 2.0f;

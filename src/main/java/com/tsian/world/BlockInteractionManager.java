@@ -1,5 +1,7 @@
 package com.tsian.world;
 
+import com.tsian.config.GameConfig;
+
 /**
  * 方块交互管理器 - 处理射线投射和方块交互
  */
@@ -13,10 +15,14 @@ public class BlockInteractionManager {
     private float breakStartTime;
     private boolean needsMeshRebuild; // 是否需要重新构建渲染缓冲区
     
-    private static final float BREAK_TIME = 1.0f; // 1秒破坏时间
-    private static final float MAX_REACH_DISTANCE = 5.0f; // 最大交互距离
+    private float BREAK_TIME; // 破坏时间（秒）
+    private float MAX_REACH_DISTANCE; // 最大交互距离
     
     public BlockInteractionManager(World world) {
+        this(world, new GameConfig());
+    }
+    
+    public BlockInteractionManager(World world, GameConfig config) {
         this.world = world;
         this.targetBlock = null;
         this.targetFace = -1;
@@ -24,6 +30,10 @@ public class BlockInteractionManager {
         this.isBreaking = false;
         this.breakStartTime = 0.0f;
         this.needsMeshRebuild = false;
+        
+        // 使用配置中的参数
+        this.BREAK_TIME = config.blockInteraction.breakTime;
+        this.MAX_REACH_DISTANCE = config.blockInteraction.maxReachDistance;
     }
     
     /**

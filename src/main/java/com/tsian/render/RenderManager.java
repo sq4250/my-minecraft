@@ -1,6 +1,7 @@
 package com.tsian.render;
 
 import com.tsian.Camera;
+import com.tsian.config.GameConfig;
 import com.tsian.world.World;
 import com.tsian.world.BlockInteractionManager;
 
@@ -24,11 +25,22 @@ public class RenderManager {
     // 方块交互管理器引用
     private BlockInteractionManager interactionManager;
     
+    // 配置参数
+    private GameConfig config;
+    
     /**
      * 初始化渲染资源
      */
     public void initRender(World world, BlockInteractionManager interactionManager) {
+        initRender(world, interactionManager, new GameConfig());
+    }
+    
+    /**
+     * 初始化渲染资源
+     */
+    public void initRender(World world, BlockInteractionManager interactionManager, GameConfig config) {
         this.interactionManager = interactionManager;
+        this.config = config;
         initTexture();
         initShaders();
         initRenderer(world);
@@ -59,7 +71,7 @@ public class RenderManager {
      */
     private void initRenderer(World world) {
         // 初始化简化渲染器并构建几何数据
-        simpleRenderer = new SimpleRenderer();
+        simpleRenderer = new SimpleRenderer(config);
         simpleRenderer.buildMeshFromWorld(world);
         System.out.println("Simple renderer initialized and mesh built");
     }
@@ -107,7 +119,12 @@ public class RenderManager {
         // 创建变换矩阵
         float[] modelMatrix = createModelMatrix();
         float[] viewMatrix = camera.getViewMatrix();
-        float[] projectionMatrix = Camera.perspective(45.0f, (float)windowWidth / (float)windowHeight, 0.1f, 1000.0f);
+        float[] projectionMatrix = Camera.perspective(
+            config.render.fov,
+            (float)windowWidth / (float)windowHeight,
+            config.render.nearPlane,
+            config.render.farPlane
+        );
         
         // 传递矩阵uniform
         shaderManager.uploadMatrix4f(shaderProgram, "model", modelMatrix);
@@ -161,11 +178,11 @@ public class RenderManager {
         
         // 设置环境光强度
         int ambientLightLocation = glGetUniformLocation(shaderProgram, "ambientLight");
-        glUniform1f(ambientLightLocation, 0.3f);  // 30% 环境光
+        glUniform1f(ambientLightLocation, config.render.ambientLight);  // 环境光强度
         
         // 设置环境光遮蔽强度
         int aoStrengthLocation = glGetUniformLocation(shaderProgram, "aoStrength");
-        glUniform1f(aoStrengthLocation, 0.5f);  // 50% AO 强度 - 减少对比度，创建更平滑的圆形阴影
+        glUniform1f(aoStrengthLocation, config.render.aoStrength);  // AO强度
     }
     
     /**

@@ -1,5 +1,6 @@
 package com.tsian;
 
+import com.tsian.config.GameConfig;
 import com.tsian.render.RenderManager;
 import com.tsian.world.World;
 import com.tsian.world.BlockInteractionManager;
@@ -31,6 +32,9 @@ public class MyMinecraft {
     private Player player;
     private float lastFrameTime;
     
+    // 游戏配置
+    private GameConfig config;
+    
     // 方块交互管理器
     private BlockInteractionManager interactionManager;
     
@@ -51,28 +55,36 @@ public class MyMinecraft {
     }
     
     private void init() {
+        // 加载配置
+        try {
+            config = GameConfig.loadDefault();
+        } catch (Exception e) {
+            System.err.println("Failed to load config, using defaults: " + e.getMessage());
+            config = new GameConfig();
+        }
+        
         // 初始化窗口管理器
-        windowManager = new WindowManager();
+        windowManager = new WindowManager(config);
         windowManager.initGLFW();
         windowManager.createWindow();
         windowManager.centerWindow();
         windowManager.showWindow();
         
         // 初始化摄像头、玩家和世界
-        camera = new Camera();
-        world = new World();
+        camera = new Camera(config);
+        world = new World(config);
         
         // 创建玩家并设置初始位置（在空岛中心）
-        player = new Player(32.0f, 8.0f, 32.0f, world);
+        player = new Player(32.0f, 8.0f, 32.0f, world, config);
         
         // 初始化基于区块的世界
         world.initializeWorld(player.getX(), player.getZ());
         
-        interactionManager = new BlockInteractionManager(world);
+        interactionManager = new BlockInteractionManager(world, config);
         lastFrameTime = (float) glfwGetTime();
         
         // 初始化输入处理器
-        inputHandler = new InputHandler(this, windowManager, camera, player, interactionManager);
+        inputHandler = new InputHandler(this, windowManager, camera, player, interactionManager, config);
         inputHandler.setupCallbacks();
     }
     
@@ -100,7 +112,7 @@ public class MyMinecraft {
         // 初始化渲染资源
         try {
             renderManager = new RenderManager();
-            renderManager.initRender(world, interactionManager);
+            renderManager.initRender(world, interactionManager, config);
             System.out.println("Render initialization successful!");
         } catch (Exception e) {
             System.err.println("Failed to initialize render: " + e.getMessage());

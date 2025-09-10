@@ -1,5 +1,7 @@
 package com.tsian;
 
+import com.tsian.config.GameConfig;
+
 import static java.lang.Math.*;
 
 /**
@@ -17,6 +19,7 @@ public class Camera {
     
     // 摄像头参数
     private float mouseSensitivity = 0.1f;
+    private float maxPitch = 89.0f;
     
     // 摄像头向量
     private float[] front = new float[3];
@@ -24,11 +27,17 @@ public class Camera {
     private float[] up = {0.0f, 1.0f, 0.0f};
     
     public Camera() {
+        this(new GameConfig());
+    }
+    
+    public Camera(GameConfig config) {
         this.x = 0.0f;
         this.y = 0.0f;
         this.z = 0.0f;
-        this.yaw = -90.0f;  // 初始方向朝向-Z轴（正前方）
-        this.pitch = 0.0f;
+        this.yaw = config.camera.initialYaw;  // 初始偏航角
+        this.pitch = config.camera.initialPitch; // 初始俯仰角
+        this.mouseSensitivity = config.camera.mouseSensitivity; // 鼠标灵敏度
+        this.maxPitch = config.camera.maxPitch; // 最大俯仰角
         updateCameraVectors();
     }
     
@@ -109,8 +118,8 @@ public class Camera {
         pitch += yoffset;
         
         // 限制俯仰角
-        if (pitch > 89.0f) pitch = 89.0f;
-        if (pitch < -89.0f) pitch = -89.0f;
+        if (pitch > maxPitch) pitch = maxPitch;
+        if (pitch < -maxPitch) pitch = -maxPitch;
         
         updateCameraVectors();
     }

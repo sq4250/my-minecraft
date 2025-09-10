@@ -1,5 +1,6 @@
 package com.tsian.render;
 
+import com.tsian.config.GameConfig;
 import com.tsian.world.World;
 import com.tsian.world.Block;
 import org.lwjgl.system.MemoryUtil;
@@ -19,7 +20,7 @@ import static org.lwjgl.opengl.GL30.*;
  */
 public class SimpleRenderer {
     
-    private static final int FLOATS_PER_VERTEX = 12; // x,y,z,u,v,blockType,nx,ny,nz,vertexCoordX,vertexCoordY,aoOcclusion
+    private int FLOATS_PER_VERTEX; // x,y,z,u,v,blockType,nx,ny,nz,vertexCoordX,vertexCoordY,aoOcclusion
     
     // 渲染资源 - 不透明方块
     private int opaqueVaoId;
@@ -43,6 +44,13 @@ public class SimpleRenderer {
     private World world;
     
     public SimpleRenderer() {
+        this(new GameConfig());
+    }
+    
+    public SimpleRenderer(GameConfig config) {
+        // 使用配置中的参数
+        this.FLOATS_PER_VERTEX = config.render.floatsPerVertex;
+        
         // 创建不透明方块的OpenGL资源
         opaqueVaoId = glGenVertexArrays();
         opaqueVboId = glGenBuffers();
