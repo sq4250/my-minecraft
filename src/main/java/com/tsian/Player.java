@@ -173,6 +173,7 @@ public class Player {
     
     /**
      * 检测碰撞箱是否与方块碰撞
+     * 修复：与新的坐标系统保持一致，方块占据(x,y,z)到(x+1,y+1,z+1)的空间
      */
     private boolean checkCollision(float playerX, float playerY, float playerZ) {
         // 计算碰撞箱边界
@@ -196,7 +197,7 @@ public class Player {
                 for (int bz = startZ; bz <= endZ; bz++) {
                     Block block = world.getBlockAt(bx, by, bz);
                     if (block != null && block.isSolid()) {
-                        // 检查与方块的精确碰撞
+                        // 检查与方块的精确碰撞（方块占据整数坐标空间）
                         if (isAABBColliding(minX, minY, minZ, maxX, maxY, maxZ,
                                           bx, by, bz, bx + 1, by + 1, bz + 1)) {
                             return true; // 发生碰撞

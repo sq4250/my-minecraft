@@ -314,46 +314,47 @@ public class SimpleRenderer {
     
     /**
      * 获取方块某个面的顶点坐标
+     * 修复：统一坐标系统，方块整数坐标(x,y,z)对应世界坐标(x,y,z)到(x+1,y+1,z+1)
      */
     private float[][] getFaceVertices(float x, float y, float z, int face) {
         float[][] vertices = new float[4][3];
         
         switch (face) {
             case 0: // 前面 (+Z)
-                vertices[0] = new float[]{x - 0.5f, y - 0.5f, z + 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y - 0.5f, z + 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y + 0.5f, z + 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y + 0.5f, z + 0.5f}; // 左上
+                vertices[0] = new float[]{x, y, z + 1.0f}; // 左下
+                vertices[1] = new float[]{x + 1.0f, y, z + 1.0f}; // 右下
+                vertices[2] = new float[]{x + 1.0f, y + 1.0f, z + 1.0f}; // 右上
+                vertices[3] = new float[]{x, y + 1.0f, z + 1.0f}; // 左上
                 break;
             case 1: // 后面 (-Z)
-                vertices[0] = new float[]{x + 0.5f, y - 0.5f, z - 0.5f}; // 左下
-                vertices[1] = new float[]{x - 0.5f, y - 0.5f, z - 0.5f}; // 右下
-                vertices[2] = new float[]{x - 0.5f, y + 0.5f, z - 0.5f}; // 右上
-                vertices[3] = new float[]{x + 0.5f, y + 0.5f, z - 0.5f}; // 左上
+                vertices[0] = new float[]{x + 1.0f, y, z}; // 左下
+                vertices[1] = new float[]{x, y, z}; // 右下
+                vertices[2] = new float[]{x, y + 1.0f, z}; // 右上
+                vertices[3] = new float[]{x + 1.0f, y + 1.0f, z}; // 左上
                 break;
             case 2: // 左面 (-X)
-                vertices[0] = new float[]{x - 0.5f, y - 0.5f, z - 0.5f}; // 左下
-                vertices[1] = new float[]{x - 0.5f, y - 0.5f, z + 0.5f}; // 右下
-                vertices[2] = new float[]{x - 0.5f, y + 0.5f, z + 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y + 0.5f, z - 0.5f}; // 左上
+                vertices[0] = new float[]{x, y, z}; // 左下
+                vertices[1] = new float[]{x, y, z + 1.0f}; // 右下
+                vertices[2] = new float[]{x, y + 1.0f, z + 1.0f}; // 右上
+                vertices[3] = new float[]{x, y + 1.0f, z}; // 左上
                 break;
             case 3: // 右面 (+X)
-                vertices[0] = new float[]{x + 0.5f, y - 0.5f, z + 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y - 0.5f, z - 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y + 0.5f, z - 0.5f}; // 右上
-                vertices[3] = new float[]{x + 0.5f, y + 0.5f, z + 0.5f}; // 左上
+                vertices[0] = new float[]{x + 1.0f, y, z + 1.0f}; // 左下
+                vertices[1] = new float[]{x + 1.0f, y, z}; // 右下
+                vertices[2] = new float[]{x + 1.0f, y + 1.0f, z}; // 右上
+                vertices[3] = new float[]{x + 1.0f, y + 1.0f, z + 1.0f}; // 左上
                 break;
             case 4: // 上面 (+Y)
-                vertices[0] = new float[]{x - 0.5f, y + 0.5f, z + 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y + 0.5f, z + 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y + 0.5f, z - 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y + 0.5f, z - 0.5f}; // 左上
+                vertices[0] = new float[]{x, y + 1.0f, z + 1.0f}; // 左下
+                vertices[1] = new float[]{x + 1.0f, y + 1.0f, z + 1.0f}; // 右下
+                vertices[2] = new float[]{x + 1.0f, y + 1.0f, z}; // 右上
+                vertices[3] = new float[]{x, y + 1.0f, z}; // 左上
                 break;
             case 5: // 下面 (-Y)
-                vertices[0] = new float[]{x - 0.5f, y - 0.5f, z - 0.5f}; // 左下
-                vertices[1] = new float[]{x + 0.5f, y - 0.5f, z - 0.5f}; // 右下
-                vertices[2] = new float[]{x + 0.5f, y - 0.5f, z + 0.5f}; // 右上
-                vertices[3] = new float[]{x - 0.5f, y - 0.5f, z + 0.5f}; // 左上
+                vertices[0] = new float[]{x, y, z}; // 左下
+                vertices[1] = new float[]{x + 1.0f, y, z}; // 右下
+                vertices[2] = new float[]{x + 1.0f, y, z + 1.0f}; // 右上
+                vertices[3] = new float[]{x, y, z + 1.0f}; // 左上
                 break;
         }
         

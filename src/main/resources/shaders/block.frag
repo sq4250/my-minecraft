@@ -62,10 +62,11 @@ void main() {
     vec3 lighting = lightingFactor * texColor.rgb;
     
     // 破坏纹理叠加 - 检查片段是否在目标方块内
+    // 修复：方块坐标(x,y,z)现在对应世界空间(x,y,z)到(x+1,y+1,z+1)
     if (breakProgress > 0.0 &&
-        FragPos.x >= targetBlockPos.x - 0.501 && FragPos.x <= targetBlockPos.x + 0.501 &&
-        FragPos.y >= targetBlockPos.y - 0.501 && FragPos.y <= targetBlockPos.y + 0.501 &&
-        FragPos.z >= targetBlockPos.z - 0.501 && FragPos.z <= targetBlockPos.z + 0.501) {
+        FragPos.x >= targetBlockPos.x && FragPos.x <= targetBlockPos.x + 1.0 &&
+        FragPos.y >= targetBlockPos.y && FragPos.y <= targetBlockPos.y + 1.0 &&
+        FragPos.z >= targetBlockPos.z && FragPos.z <= targetBlockPos.z + 1.0) {
         
         // 计算在当前方块面上的局部UV坐标 [0,1]
         // 需要从TexCoord反推出在当前方块纹理中的相对位置
@@ -102,9 +103,10 @@ void main() {
     }
     
     // 检查是否是被选中的方块，提高亮度
-    if (abs(FragPos.x - targetBlockPos.x) < 0.501 &&
-        abs(FragPos.y - targetBlockPos.y) < 0.501 &&
-        abs(FragPos.z - targetBlockPos.z) < 0.501 &&
+    // 修复：方块坐标(x,y,z)现在对应世界空间(x,y,z)到(x+1,y+1,z+1)
+    if (FragPos.x >= targetBlockPos.x && FragPos.x <= targetBlockPos.x + 1.0 &&
+        FragPos.y >= targetBlockPos.y && FragPos.y <= targetBlockPos.y + 1.0 &&
+        FragPos.z >= targetBlockPos.z && FragPos.z <= targetBlockPos.z + 1.0 &&
         targetBlockPos.x > -900.0) { // 确保有有效的目标方块
         
         // 提高被选中方块的亮度

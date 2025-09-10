@@ -268,22 +268,36 @@ public class BlockInteractionManager {
     
     /**
      * 简单的玩家碰撞检测
+     * 修复：与新坐标系统一致，方块占据(blockX,blockY,blockZ)到(blockX+1,blockY+1,blockZ+1)的空间
      */
     private boolean isPlayerColliding(float playerX, float playerY, float playerZ,
                                      int blockX, int blockY, int blockZ) {
-        // 玩家高度约为1.8格，宽度约为0.6格
-        float playerWidth = 0.6f;
-        float playerHeight = 1.8f;
+        // 玩家尺寸（使用Player类中的常量值）
+        float playerWidth = 10.0f / 16.0f;   // 0.625方块宽
+        float playerHeight = 29.0f / 16.0f;  // 1.8125方块高
         
-        // 检查X和Z平面的碰撞
-        boolean xCollision = Math.abs(playerX - blockX) < (0.5f + playerWidth / 2);
-        boolean zCollision = Math.abs(playerZ - blockZ) < (0.5f + playerWidth / 2);
+        // 计算玩家碰撞箱
+        float playerMinX = playerX - playerWidth / 2;
+        float playerMaxX = playerX + playerWidth / 2;
+        float playerMinY = playerY;
+        float playerMaxY = playerY + playerHeight;
+        float playerMinZ = playerZ - playerWidth / 2;
+        float playerMaxZ = playerZ + playerWidth / 2;
         
-        // 检查Y轴碰撞（玩家脚部到头部）
-        boolean yCollision = (playerY - playerHeight / 2 < blockY + 0.5f) &&
-                            (playerY + playerHeight / 2 > blockY - 0.5f);
+        // 方块占据的空间：从(blockX,blockY,blockZ)到(blockX+1,blockY+1,blockZ+1)
+        float blockMinX = blockX;
+        float blockMaxX = blockX + 1.0f;
+        float blockMinY = blockY;
+        float blockMaxY = blockY + 1.0f;
+        float blockMinZ = blockZ;
+        float blockMaxZ = blockZ + 1.0f;
         
-        return xCollision && zCollision && yCollision;
+        // AABB碰撞检测
+        boolean xCollision = playerMaxX > blockMinX && playerMinX < blockMaxX;
+        boolean yCollision = playerMaxY > blockMinY && playerMinY < blockMaxY;
+        boolean zCollision = playerMaxZ > blockMinZ && playerMinZ < blockMaxZ;
+        
+        return xCollision && yCollision && zCollision;
     }
     
     /**
