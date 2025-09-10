@@ -186,12 +186,13 @@ public class World {
     }
     
     /**
-     * 添加新方块到世界中
+     * 添加新方块到世界中（立即更新可见面）
      */
     public boolean addBlock(int x, int y, int z, Block.BlockType blockType) {
         boolean success = chunkManager.addBlock(x, y, z, blockType);
         if (success) {
-            needsVisibleFaceUpdate = true;
+            // 立即重新计算可见面，确保网格重建时使用最新数据
+            calculateVisibleFaces();
         }
         return success;
     }

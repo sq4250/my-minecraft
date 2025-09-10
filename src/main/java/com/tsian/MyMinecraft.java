@@ -34,8 +34,6 @@ public class MyMinecraft {
     // 方块交互管理器
     private BlockInteractionManager interactionManager;
     
-    // 标记是否需要重新构建网格
-    private boolean meshRebuildNeeded = false;
     
     public void run() {
         System.out.println("Starting My Minecraft with Modern OpenGL...");
@@ -157,13 +155,7 @@ public class MyMinecraft {
             inputHandler.updateBlockInteraction(currentFrameTime, deltaTime);
         }
         
-        // 检查是否需要重新构建网格
-        if (meshRebuildNeeded) {
-            if (renderManager != null) {
-                renderManager.rebuildMesh(world);
-            }
-            meshRebuildNeeded = false;
-        }
+        // 网格重建现在在onMeshRebuildNeeded()中立即执行，无需延迟处理
         
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
@@ -185,10 +177,18 @@ public class MyMinecraft {
     }
     
     /**
-     * 通知需要重新构建网格
+     * 通知需要重新构建网格（立即重建并渲染）
      */
     public void onMeshRebuildNeeded() {
-        meshRebuildNeeded = true;
+        // 立即重建网格，避免延迟一帧
+        if (renderManager != null && world != null) {
+            renderManager.rebuildMesh(world);
+            
+            // 立即执行一次渲染更新，确保新方块立即显示
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            renderManager.render(camera, windowManager.getCurrentWidth(), windowManager.getCurrentHeight());
+            glfwSwapBuffers(windowManager.getWindow());
+        }
     }
     
     /**

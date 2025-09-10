@@ -258,11 +258,7 @@ public class BlockInteractionManager {
         
         // 在世界中添加新方块
         boolean success = world.addBlock(placeX, placeY, placeZ, blockType);
-        if (success) {
-            // 标记需要重新构建渲染缓冲区
-            needsMeshRebuild = true;
-        }
-        
+        // 无论成功与否都返回结果，网格重建由调用方处理
         return success;
     }
     

@@ -122,11 +122,10 @@ public class InputHandler {
                     if (!mouseCaptured) {
                         captureMouse();
                     } else {
-                        // 开始连续放置方块
+                        // 立即放置第一个方块（响应点击）
                         rightMousePressed = true;
-                        // 立即放置第一个方块
                         handleRightClick();
-                        // 重置放置定时器，避免立即放置第二个方块
+                        // 重置放置定时器用于后续连续放置
                         lastPlaceTime = 0;
                     }
                 } else if (action == GLFW_RELEASE) {

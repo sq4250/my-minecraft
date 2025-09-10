@@ -4,6 +4,7 @@ import com.tsian.Camera;
 import com.tsian.world.World;
 import com.tsian.world.BlockInteractionManager;
 
+import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
 
 /**
@@ -212,10 +213,12 @@ public class RenderManager {
     }
     
     /**
-     * 重新构建网格
+     * 重新构建网格（立即刷新GPU状态）
      */
     public void rebuildMesh(World world) {
         simpleRenderer.buildMeshFromWorld(world);
+        // 强制完成所有GPU操作，确保新网格立即生效
+        glFinish();
     }
     
     // Getter方法
